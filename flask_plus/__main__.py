@@ -1,4 +1,4 @@
-import json,pymysql,random,time,sqlite3,sys
+import json,pymysql,random,time,sqlite3,sys,re
 
 def random_string(s):
  return ''.join([random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890%;,:?.@|[]{}#!<>&-+/*$') for x in range(s)])
@@ -9,6 +9,7 @@ def create_mysql_db(d):
   cu.execute("CREATE DATABASE IF NOT EXISTS "+d["db"])
   cu.close()
   c.close()
+
 
 def get_mysql_connection(c):
  return pymysql.connect(**c)
@@ -40,18 +41,34 @@ def read_configs():
  f.close()
  return d
 
-def create_app_script():
+def create_app_script(configs):
+ r=configs["app"]["routes"]
+ s=""
+ for x in r:
+  a=re.findall(r'<[^>]*>',x)
+  params=",".join([ i.replace('<','').replace('>','').split(':')[0] for i in a])
+  if x[:1]!="/":
+   x="/"+x
+  s+="""
+@app.route('{}',methods=["GET","POST"])
+def {}({}):
+ return ""
+""".format(x,x[1:].replace('/','_').replace('<','').replace('>','').replace(':','_'),params)
  script="""from flask import Flask, render_template, request,send_file,Response,redirect,session
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import  FileStorage
 
 import json
 
+import sanitizy
+
 app = Flask(__name__)
 
-@app.route('/',methods=["GET"])
-def home():
+
+@app.route('/',methods=["GET","POST"])
+def home_page_greeting_welcome():
  return "hello"
+"""+s+"""
 
 def read_configs():
  f = open('config.json')
@@ -96,7 +113,9 @@ def init_configs():
         "testing":
             True,
         "flask_env":
-            'development'
+            'development',
+        "routes":
+            ["/login","/logout"]
         },
     "sqlite":
             {
@@ -205,7 +224,9 @@ def init_configs():
 }
 
  write_configs(configs)
- create_app_script()
+
+def init_app():
+ create_app_script(read_configs())
 
 
 def set_mysql_database(data):
@@ -247,23 +268,35 @@ def set_sqlite_database(data):
  write_configs(data)
 
 supported_dbs=["sqlite","mysql"]
+supported_inits=["app","config"]
 
 def help_msg(e):
   dbs=" or ".join(supported_dbs)
   args=" or ".join(supported_dbs)
   print(e+"\n\nUsage:\n\t\t"+sys.argv[0]+" [args...]\n\nargs:\n\t\tinit: to create \"config.json\" and \"app.py\" file that contains setup configurations.\n\t\tdb: to choose database type to use ( "+dbs+" )")
-  print('\nExample 1:\n\n\t'+sys.argv[0]+' init\n\n\t'+sys.argv[0]+' db sqlite')
-  print('\nExample 2:\n\n\t'+sys.argv[0]+' init\n\n\t'+sys.argv[0]+' db mysql')
+  print('\nExample 1:\n\n\t'+sys.argv[0]+' init config\n\n\t'+sys.argv[0]+' init app\n\n\t'+sys.argv[0]+' db sqlite')
+  print('\nExample 2:\n\n\t'+sys.argv[0]+' init config\n\n\t'+sys.argv[0]+' init app\n\n\t'+sys.argv[0]+' db mysql')
+
+
 
 def main():
- if len(sys.argv)<2:
+ if len(sys.argv)<3:
   help_msg("Missing arguments")
   sys.exit()
  if sys.argv[1] not in ["init","db"]:
   help_msg('Unknown arguments')
   sys.exit()
- if sys.argv[1]=="init":
+ if sys.argv[2] not in supported_dbs and sys.argv[2] not in supported_inits:
+  help_msg('Unknown arguments')
+  sys.exit()
+ if sys.argv[1]=="init" and sys.argv[2]=="config":
   init_configs()
+  sys.exit()
+ if sys.argv[1]=="init" and sys.argv[2]=="app":
+  try:
+   init_app()
+  except:
+   help_msg('Missing configs ! Try runing: '+sys.argv[0]+' init config')
   sys.exit()
  if sys.argv[1]=="db" and sys.argv[2] in supported_dbs:
   try:
@@ -278,3 +311,6 @@ def main():
  else:
   help_msg('Unknown Database type')
  sys.exit() 
+
+
+main()
