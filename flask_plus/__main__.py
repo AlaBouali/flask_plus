@@ -1,4 +1,4 @@
-import json,pymysql,random,time,sqlite3,sys,re,os,pip,psycopg2,pyodbc
+import json,pymysql,random,time,sqlite3,sys,re,os,pip,psycopg2
 
 
 
