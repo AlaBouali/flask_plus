@@ -285,9 +285,10 @@ def list_contains(l,s):
 def get_database_connection():
  if database_type!="sqlite":
   if database_type=="postgresql":
-  conn= database_connector.connect(**database_credentials)
-  conn.set_session(autocommit=True)
-  return conn
+   conn= database_connector.connect(**database_credentials)
+   conn.set_session(autocommit=True)
+   return conn
+  return database_connector.connect(**database_credentials)
  return database_connector.connect(database_credentials['file'],isolation_level=database_credentials['isolation_level'])
 
 
