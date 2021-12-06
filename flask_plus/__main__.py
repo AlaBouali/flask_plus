@@ -1,6 +1,6 @@
 import json,pymysql,random,time,sqlite3,sys,re,os,pip,psycopg2,pyodbc
 
-
+flask_plus_version="Flask_plus Python"
 
 def install(p):
     os.system(p+" install -r requirements.txt")
@@ -135,7 +135,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.datastructures import  FileStorage
 
 
-import json,os,random,sys
+import json,os,random,sys,datetime
 
 import sanitizy
 
@@ -145,7 +145,7 @@ import """+configs[configs["database"].get("database_type",'sqlite')].get("datab
 app = Flask(__name__)
 
 
-
+flask_plus_version='"""+flask_plus_version+"""'
 
 
 #Keep going down untill I tell you to stop.. Don't touch what's below unless you know what you are doing :)
@@ -154,6 +154,12 @@ app = Flask(__name__)
 
 
 #global important variables
+
+
+
+additional_headers={'X-Frame-Options':'SAMEORIGIN','Content-Security-Policy': "default-src 'self'",'X-Content-Type-Options': 'nosniff','Referrer-Policy': 'origin-when-cross-origin','Server':flask_plus_version}
+
+unwanted_headers=['Date']
 
 app_conf="""+str(configs["app"]["configs"])+"""
 
@@ -229,7 +235,27 @@ def random_string(s):
  return ''.join([random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890%;,:?.@|[]{}#!<>&-+/*$') for x in range(s)])
 
 
+def set_headers(h,d):
+ for x in d:
+  h[x] = d[x]
 
+
+def unset_headers(h,d):
+ for x in d:
+  h[x]=''
+
+
+def set_session_variables(s,d):
+ for x in d:
+  s[x] = d[x]
+ s.modified = True
+ s.permanent = True
+
+def reset_session(s):
+ s.clear()
+ s.modified = True
+ s.permanent = True
+ 
 #security checks
 
 def csrf_token_checker(r,s):
@@ -250,9 +276,12 @@ def login():
 
 '''
 
-def is_logged_in(s):
+def is_logged_in(s,variables={}):
  s[csrf_token_name]=random_string(random.randint(30,40))
  s[session_login_indicator]=True
+ set_session_variables(s,variables)
+ s.modified = True
+ s.permanent = True
 
 
 '''
@@ -270,7 +299,9 @@ def logout():
 def is_not_logged_in(s):
  s[csrf_token_name]=""
  s[session_login_indicator]=False
-
+ reset_session(s)
+ s.modified = True
+ s.permanent = True
 
 
 def validate_logged_in(s):
@@ -313,11 +344,8 @@ def no_ssrf(p,url=True):
 def is_safe_path( path):
   return os.path.realpath(path).startswith(basedir)
 
-def download_this(path):
- if is_safe_path(path)==True:
-  if os.path.exists(path):
-   return send_file(path, as_attachment=True)
- return "Not Found",404
+
+
 
 def list_contains(l,s):
  return any(x.startswith(s) for x in l)
@@ -418,6 +446,14 @@ def before_request():
    
 
 
+@app.after_request
+def add_header(response):
+    set_headers(response.headers,additional_headers)
+    unset_headers(response.headers,unwanted_headers)
+    return response
+    
+
+
 
 def return_json(data):
  response = app.response_class(
@@ -426,6 +462,34 @@ def return_json(data):
         mimetype='application/json'
     )
  return response
+
+
+def download_this(path):
+ if is_safe_path(path)==True:
+  if os.path.exists(path):
+   return send_file(path, as_attachment=True)
+ return "Not Found",404
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -437,6 +501,19 @@ def return_json(data):
 #Your work starts here champ !! Set your routes
  
 """+s+"""
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -480,11 +557,6 @@ def downloads(file):
  return download_this(path)
 
 
-def read_configs():
- f = open('config.json')
- d = json.load(f)
- f.close()
- return d
 
 
 #configuring the app to be as specified in the "config.json" file
@@ -493,11 +565,12 @@ def read_configs():
 app.secret_key =app_conf["secret_key"]
 app.config['TESTING'] =app_conf["testing"]
 app.config['FLASK_ENV'] =app_conf["flask_env"]
+app.permanent_session_lifetime = datetime.timedelta(**app_conf["session_timeout"])
 
 if __name__ == '__main__':
    app.run(host=app_conf["host"],port=app_conf["port"],debug = app_conf["debug"],threaded=app_conf["threaded"],ssl_context=app_conf["ssl_context"])
 """
- f = open("app.py", "w")
+ f = open(configs["app"].get('name','')+".py", "w")
  f.write(script)
  f.close()
  os.makedirs("templates", exist_ok=True)
@@ -526,6 +599,8 @@ def init_configs():
  configs={
     "app":
         {
+         "name":
+                "app",
          "configs":{
                 "host":
                         "0.0.0.0",
@@ -542,7 +617,12 @@ def init_configs():
                 "testing":
                     True,
                 "flask_env":
-                    'development'
+                    'development',
+                "session_timeout":
+                        {
+                            "days":
+                                    365,
+                        }
                     },
         "public_routes":
             ["/"],
