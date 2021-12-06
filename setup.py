@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="flask_plus",
-    version="1.1.5",
+    version="1.1.7",
     author="AlaBouali",
     author_email="trap.leader.123@gmail.com",
     description="Flask module to auto setup the project's configurations (app and database)",
@@ -13,7 +13,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/AlaBouali/flask_plus",
     python_requires=">=2.7",
-    install_requires=["pymysql","cryptography","sanitizy","psycopg2"],
+    install_requires=["pymysql","cryptography","sanitizy","psycopg2","pyodbc"],
     packages=["flask_plus"],
     entry_points={ 'console_scripts': ['flask_plus = flask_plus.__main__:main' ] },
     license="MIT License",
