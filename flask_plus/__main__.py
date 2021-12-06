@@ -1,4 +1,4 @@
-import json,pymysql,random,time,sqlite3,sys,re,os,pip,psycopg2
+import json,pymysql,random,time,sqlite3,sys,re,os,pip,psycopg2,pyodbc
 
 
 
@@ -10,26 +10,55 @@ def random_string(s):
  return ''.join([random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890%;,:?.@|[]{}#!<>&-+/*$') for x in range(s)])
 
 def create_mysql_db(d,connector):
-  di=d.copy()
-  for x in ['db','database','dbname','DATABASE']:
+  if type(d)==str:
+   di="%s"%d
+   for x in di.split():
+    if "dbname=" in x.lower():
+     d.replace(x,"dbname=''")
+   c=connector.connect(di)
+   if connector==psycopg2:
+    c.set_session(autocommit=True)
+   else:
+    c.autocommit=True
+   cu=c.cursor()
+   if connector==psycopg2:
+    a=d.split()
+    db=""
+    for x in a:
+     if "dbname=" in x.lower():
+      db=x.split("=")[1]
+    a=d.split(';')
+   elif connector==pyodbc:
+    db=""
+    for x in a:
+     if "database=" in x.lower() :
+      db=x.split("=")[1]
    try:
-    di.pop(x)
+    cu.execute("CREATE DATABASE IF NOT EXISTS "+db)
    except:
     pass
-  c=connector.connect(**di)
-  if connector==psycopg2:
-   c.set_session(autocommit=True)
-  cu=c.cursor()
-  cu.execute("CREATE DATABASE IF NOT EXISTS "+d["db"])
-  cu.close()
-  c.close()
+  else:
+   di=d.copy()
+   for x in ['db','database','dbname','DATABASE']:
+    try:
+     di.pop(x)
+    except:
+     pass
+   c=connector.connect(**di)
+   cu=c.cursor()
+   cu.execute("CREATE DATABASE IF NOT EXISTS "+d["db"])
+   cu.close()
+   c.close()
 
 
 def get_connection(c,connector):
- if connector==psycopg2:
-   c=connector.connect(**di)
-   c.set_session(autocommit=True)
-   return c
+ if type(c)==str:
+   d=connector.connect(c)
+   if connector==psycopg2:
+    d.set_session(autocommit=True)
+   else:
+    d.autocommit=True
+   return d
  return connector.connect(**c)
 
 def get_sqlite_connection(c):
@@ -60,6 +89,16 @@ def read_configs():
  return d
 
 def create_app_script(configs):
+ login_redirect="/"
+ if configs["app"].get('templates',[])!=[]:
+  login_redirect=configs["app"]['templates'][0]
+ elif list(dict.fromkeys(configs["app"].get("public_routes",[])+configs["app"].get("authenticated_routes",[])+configs["app"].get("csrf_routes",[])))!=[]:
+  login_redirect=list(dict.fromkeys(configs["app"].get("public_routes",[])+configs["app"].get("authenticated_routes",[])+configs["app"].get("csrf_routes",[])))[0]
+ db_con=configs[configs["database"].get("database_type",'sqlite')].get("connection",{})
+ if type(db_con)==str:
+  db_con=str(json.dumps(db_con))
+ else:
+  db_con=str(db_con)
  r=configs["app"].get("requirements",[])
  con=configs[configs["database"].get("database_type",'sqlite')].get("database_connector",'sqlite3')
  if con!="sqlite3":
@@ -116,6 +155,8 @@ app = Flask(__name__)
 
 #global important variables
 
+app_conf="""+str(configs["app"]["configs"])+"""
+
 #the folder where you store the files that are accesible to the users to download
 downloads_folder="downloads"
 
@@ -158,14 +199,16 @@ authenticated_endpoints="""+str([ "/"+"/".join([ i for i in x.split('/') if i.st
 session_login_indicator="logged_in"
 
 #the endpoint which the user will be redirected if he accessed a page which requires authentication
-login_endpoint="login.html"
+login_endpoint='"""+login_redirect+"""'
 
 
 database_type='"""+configs["database"].get("database_type",'sqlite')+"""'
 
 database_connector="""+configs[configs["database"].get("database_type",'sqlite')].get("database_connector",'sqlite3')+"""
 
-database_credentials="""+str(configs[configs["database"].get("database_type",'sqlite')].get("connection",{}))+"""
+database_credentials="""+db_con+"""
+
+database_structure="""+str(configs["database"]["tables_names"])+"""
 
 
 #general Model class to have any arributes for any model
@@ -283,12 +326,15 @@ def list_contains(l,s):
 
 
 def get_database_connection():
+ if type(database_credentials)==str:
+   d=database_connector.connect(database_credentials)
+   if database_connector==psycopg2:
+    d.set_session(autocommit=True)
+   else:
+    d.autocommit=True
+   return d
  if database_type!="sqlite":
-  if database_type=="postgresql":
-   conn= database_connector.connect(**database_credentials)
-   conn.set_session(autocommit=True)
-   return conn
-  return database_connector.connect(**database_credentials)
+  return  database_connector.connect(**database_credentials)
  return database_connector.connect(database_credentials['file'],isolation_level=database_credentials['isolation_level'])
 
 
@@ -299,6 +345,7 @@ def close_object(c):
  c.close()
 
 
+#print(get_database_connection())
 
 
 def database_execute(sql,*args):
@@ -312,6 +359,7 @@ def database_execute(sql,*args):
  close_object(cur)
  close_object(c)
  
+
 def database_executemany(sql,*args):
  a=[]
  if args:
@@ -322,7 +370,8 @@ def database_executemany(sql,*args):
  cur.executemany(sql,a)
  close_object(cur)
  close_object(c)
- 
+
+
 def database_fetch_one(sql,*args):
  a=[]
  if args:
@@ -370,7 +419,13 @@ def before_request():
 
 
 
-
+def return_json(data):
+ response = app.response_class(
+        response=json.dumps(data,default=str),
+        status=200,
+        mimetype='application/json'
+    )
+ return response
 
 
 
@@ -431,11 +486,9 @@ def read_configs():
  f.close()
  return d
 
-conf=read_configs()
 
 #configuring the app to be as specified in the "config.json" file
 
-app_conf=conf["app"]
 
 app.secret_key =app_conf["secret_key"]
 app.config['TESTING'] =app_conf["testing"]
@@ -473,22 +526,24 @@ def init_configs():
  configs={
     "app":
         {
-        "host":
-                "0.0.0.0",
-        "port":
-                5000,
-        "threaded":
-                True,
-        "ssl_context":
-                None,
-        "secret_key":
-			random_string(random.randint(30,50)),
-        "debug":
-            True,
-        "testing":
-            True,
-        "flask_env":
-            'development',
+         "configs":{
+                "host":
+                        "0.0.0.0",
+                "port":
+                        5000,
+                "threaded":
+                        True,
+                "ssl_context":
+                        None,
+                "secret_key":
+                    random_string(random.randint(30,50)),
+                "debug":
+                    True,
+                "testing":
+                    True,
+                "flask_env":
+                    'development'
+                    },
         "public_routes":
             ["/"],
         "authenticated_routes":
@@ -496,7 +551,7 @@ def init_configs():
         "csrf_routes":
             [],
         "templates":
-            ["index.html","login.html","signup.html"],
+            ["index.html"],
         "static":
             ["style.css","style.js"],
         "uploads":
@@ -542,18 +597,15 @@ def init_configs():
 			},
     "postgresql":{
                 "connection":
-                    {
-                        "host":
-                                "localhost",
-                        "user":
-                                "admin",
-                        "password":
-                                "",
-                        "dbname":
-                                "test_api"
-                    },
+                    "host=localhost dbname=test_api user=postgres password=root",
                 "database_connector":
                         "psycopg2"
+			},
+    "mssql":{
+                "connection":
+                    "DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=test_api;UID=user;PWD=user",
+                "database_connector":
+                        "pyodbc"
 			},
     "database":
 			{
@@ -565,7 +617,7 @@ def init_configs():
                         {},
                 "values":
                         {},
-                "tables_example":
+                "tables_example_sqlite":
                         {
                             "users_example":
                                 {
@@ -614,7 +666,7 @@ def init_app():
 def set_database(data,db):
  if data[db]["database_connector"].isalnum() ==True:
   create_mysql_db(data[db]["connection"],eval(data[db]["database_connector"]))
- co=get_connection(data["mysql"]["connection"],eval(data[db]["database_connector"]))
+ co=get_connection(data[db]["connection"],eval(data[db]["database_connector"]))
  cu=get_cursor(co)
  t=data["database"]["tables"]
  a=[]
@@ -631,7 +683,7 @@ def set_database(data,db):
  cu.close()
  co.close()
  data["database"]["tables_names"]=a
- data["database"]["database_type"]="mysql"
+ data["database"]["database_type"]=db
  write_configs(data)
 
 
