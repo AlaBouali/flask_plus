@@ -13,7 +13,7 @@ Example 1:
 
         flask_plus init config
 		
-		flask_plus db sqlite
+	flask_plus db sqlite
 
         flask_plus init app
 
@@ -22,7 +22,7 @@ Example 2:
 
         flask_plus init config
 		
-		flask_plus db mysql
+	flask_plus db mysql
 
         flask_plus init app
 
