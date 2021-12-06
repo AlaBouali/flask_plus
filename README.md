@@ -12,18 +12,19 @@ args:
 Example 1:
 
         flask_plus init config
+		
+		flask_plus db sqlite
 
         flask_plus init app
 
-        flask_plus db sqlite
 
 Example 2:
 
         flask_plus init config
+		
+		flask_plus db mysql
 
         flask_plus init app
-
-        flask_plus db mysql
 
 </pre></div>
 After running:
