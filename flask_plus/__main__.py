@@ -121,12 +121,14 @@ def create_app_script(configs):
   if x=="/":
    s+="""
 @app.route('{}',methods=["GET","POST"])
+@endpoints_limiter.limit("3600/hour")
 def {}({}):
  return ""
 """.format("/","home_root",'')
   else:
    s+="""
 @app.route('{}',methods=["GET","POST"])
+@endpoints_limiter.limit("3600/hour")
 def {}({}):
  return ""
 """.format(x,x[1:].replace('/','_').replace('<','').replace('>','').replace(':','_'),params)
@@ -134,6 +136,10 @@ def {}({}):
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import  FileStorage
 
+import flask_recaptcha 
+
+import flask_limiter
+from flask_limiter.util import get_remote_address
 
 import json,os,random,sys,datetime,ssl
 
@@ -143,6 +149,9 @@ import sanitizy
 import """+configs[configs["database"].get("database_type",'sqlite')].get("database_connector",'sqlite3')+"""
 
 app = Flask(__name__)
+
+
+endpoints_limiter=flask_limiter.Limiter(app, key_func=get_remote_address, default_limits=[])
 
 
 server_signature='"""+flask_plus_version+"""'
@@ -174,6 +183,7 @@ hsts_enabled=True if app_conf['ssl_context']!=None else False
 
 if hsts_enabled==True:
  additional_headers.update({'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload'})
+
 #the folder where you store the files that are accesible to the users to download
 downloads_folder="downloads"
 
@@ -206,6 +216,8 @@ csrf_token_check=False
 #Domains/Subdomains that are allowed to send POST requests
 accepted_domains=[]
 
+recaptcha_endpoints="""+str([ "/"+"/".join([ i for i in x.split('/') if i.strip()!=""]) for x in configs["app"].get("recaptcha_routes",[])])+"""
+
 #the routes which must be validated against CSRF
 csrf_endpoints="""+str([ "/"+"/".join([ i for i in x.split('/') if i.strip()!=""]) for x in configs["app"].get("csrf_routes",[])])+"""
 
@@ -226,6 +238,9 @@ database_connector="""+configs[configs["database"].get("database_type",'sqlite')
 database_credentials="""+db_con+"""
 
 database_structure="""+str(configs["database"]["tables_names"])+"""
+
+recaptcha =flask_recaptcha.ReCaptcha(app)
+
 
 
 #general Model class to have any arributes for any model
@@ -454,6 +469,9 @@ def before_request():
         code = 301
         return redirect(url, code=code)
  real_path="/"+"/".join([ x for x in request.path.split('/') if x.strip()!=""])
+ if request.method=="POST" and list_contains( recaptcha_endpoints, real_path)==True:
+  if recaptcha.verify()==False:
+   return "Invalid reCaptcha",401
  if list_contains( authenticated_endpoints, real_path)==True and validate_logged_in(session)==False:
   return redirect(login_endpoint)
  if request.method=="POST" and list_contains( csrf_endpoints, real_path)==True:
@@ -576,8 +594,7 @@ app.permanent_session_lifetime = datetime.timedelta(**session_timeout)
 
 
 if __name__ == '__main__':
-   app.run(host=app_conf["host"],port=app_conf["port"],threaded=app_conf["threaded"],ssl_context=app_conf["ssl_context"])
-"""
+   app.run(**app_conf)"""
  f = open(configs["app"].get('name','')+".py", "w")
  f.write(script)
  f.close()
@@ -618,6 +635,8 @@ def init_configs():
                         True,
                 "ssl_context":
                         None,
+                "processes":
+                        1
                 },
          "config":{
                 'ENV': 'production', 
@@ -625,11 +644,11 @@ def init_configs():
                 'TESTING': True, 
                 'PROPAGATE_EXCEPTIONS': None, 
                 'PRESERVE_CONTEXT_ON_EXCEPTION': None, 
-                'SECRET_KEY': random_string(random.randint(30,50)), 
+                'SECRET_KEY': random_string(64), 
                 'USE_X_SENDFILE': False, 
                 'SERVER_NAME': None, 
                 'APPLICATION_ROOT': '/', 
-                'SESSION_COOKIE_NAME': 'session', 
+                'SESSION_COOKIE_NAME': 'FPSessionId', 
                 'SESSION_COOKIE_DOMAIN': None, 
                 'SESSION_COOKIE_PATH': None, 
                 'SESSION_COOKIE_HTTPONLY': True, 
@@ -648,7 +667,10 @@ def init_configs():
                 'JSONIFY_MIMETYPE': 'application/json', 
                 'TEMPLATES_AUTO_RELOAD': None, 
                 'MAX_COOKIE_SIZE': 4093, 
-                'FLASK_ENV': 'development'
+                'FLASK_ENV': 'development',
+                'MAX_CONTENT_LENGTH': 50 * 1024 * 1024,
+                'RECAPTCHA_SITE_KEY':None,
+                'RECAPTCHA_SECRET_KEY':None
                 },
         "session_timeout":
                 {
@@ -660,6 +682,10 @@ def init_configs():
             [],
         "csrf_routes":
             [],
+        "recaptcha_routes":
+            [],
+        "rate_limited_routes":
+            [("/","1/day")],
         "templates":
             ["index.html"],
         "static":
@@ -667,9 +693,9 @@ def init_configs():
         "uploads":
             [],
         "downloads":
-            [("example.txt","this download file example.")],
+            [],
         "requirements":
-            ["flask","sanitizy"],
+            ["flask","sanitizy","flask-limiter","Flask-reCaptcha"],
         "pip":
             "pip3"
         },
@@ -764,7 +790,7 @@ def init_configs():
                         }
             },
 	"secret_token":
-			random_string(random.randint(30,50))
+			random_string(64)
 }
 
  write_configs(configs)
