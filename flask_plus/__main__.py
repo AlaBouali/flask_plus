@@ -158,9 +158,9 @@ server_signature='"""+flask_plus_version+"""'
 
 permanent_session=True
 
-additional_headers={'X-Frame-Options':'SAMEORIGIN','Content-Security-Policy': "default-src 'self'",'X-Content-Type-Options': 'nosniff','Referrer-Policy': 'origin-when-cross-origin','Server':server_signature}
+additional_headers={'X-Frame-Options':'SAMEORIGIN','Content-Security-Policy': "default-src 'self'",'X-Content-Type-Options': 'nosniff','Referrer-Policy': 'same-origin','Server':server_signature,'X-XSS-Protection': '0','X-Permitted-Cross-Domain-Policies': 'none','Permissions-Policy': "geolocation 'none'; camera 'none'; speaker 'none';"}
 
-unwanted_headers=['Date']
+unwanted_headers=[]
 
 app_conf="""+str(configs["app"]["run"])+"""
 
