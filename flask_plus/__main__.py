@@ -1,4 +1,4 @@
-import json,pymysql,random,time,sqlite3,sys,re,os,pip,psycopg2,pyodbc
+import json,pymysql,random,time,sqlite3,sys,re,os,pip,psycopg2,pyodbc,datetime
 
 flask_plus_version="Flask_plus Python"
 
@@ -123,7 +123,7 @@ def create_app_script(configs):
 @app.route('{}',methods=["GET","POST"])
 def {}({}):
  return ""
-""".format("/","home",'')
+""".format("/","home_root",'')
   else:
    s+="""
 @app.route('{}',methods=["GET","POST"])
@@ -135,7 +135,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.datastructures import  FileStorage
 
 
-import json,os,random,sys,datetime
+import json,os,random,sys,datetime,ssl
 
 import sanitizy
 
@@ -145,7 +145,7 @@ import """+configs[configs["database"].get("database_type",'sqlite')].get("datab
 app = Flask(__name__)
 
 
-flask_plus_version='"""+flask_plus_version+"""'
+server_signature='"""+flask_plus_version+"""'
 
 
 #Keep going down untill I tell you to stop.. Don't touch what's below unless you know what you are doing :)
@@ -156,13 +156,24 @@ flask_plus_version='"""+flask_plus_version+"""'
 #global important variables
 
 
+permanent_session=True
 
-additional_headers={'X-Frame-Options':'SAMEORIGIN','Content-Security-Policy': "default-src 'self'",'X-Content-Type-Options': 'nosniff','Referrer-Policy': 'origin-when-cross-origin','Server':flask_plus_version}
+additional_headers={'X-Frame-Options':'SAMEORIGIN','Content-Security-Policy': "default-src 'self'",'X-Content-Type-Options': 'nosniff','Referrer-Policy': 'origin-when-cross-origin','Server':server_signature}
 
 unwanted_headers=['Date']
 
-app_conf="""+str(configs["app"]["configs"])+"""
+app_conf="""+str(configs["app"]["run"])+"""
 
+server_conf="""+str(configs["app"]["config"])+"""
+
+session_timeout="""+str(configs["app"]["session_timeout"])+"""
+
+force_https=True if app_conf['ssl_context']!=None else False
+
+hsts_enabled=True if app_conf['ssl_context']!=None else False
+
+if hsts_enabled==True:
+ additional_headers.update({'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload'})
 #the folder where you store the files that are accesible to the users to download
 downloads_folder="downloads"
 
@@ -245,16 +256,20 @@ def unset_headers(h,d):
   h[x]=''
 
 
+def set_cookie(r,k,v,attributes):
+ r.set_cookie(k, v , **attributes)
+
+
 def set_session_variables(s,d):
  for x in d:
   s[x] = d[x]
  s.modified = True
- s.permanent = True
+ s.permanent = permanent_session
 
 def reset_session(s):
  s.clear()
  s.modified = True
- s.permanent = True
+ s.permanent = permanent_session
  
 #security checks
 
@@ -277,11 +292,12 @@ def login():
 '''
 
 def is_logged_in(s,variables={}):
- s[csrf_token_name]=random_string(random.randint(30,40))
+ csrf=random_string(random.randint(30,40))
+ s[csrf_token_name]=csrf
  s[session_login_indicator]=True
  set_session_variables(s,variables)
  s.modified = True
- s.permanent = True
+ s.permanent = permanent_session
 
 
 '''
@@ -301,7 +317,7 @@ def is_not_logged_in(s):
  s[session_login_indicator]=False
  reset_session(s)
  s.modified = True
- s.permanent = True
+ s.permanent = permanent_session
 
 
 def validate_logged_in(s):
@@ -433,6 +449,10 @@ def database_fetch_all(sql,*args):
 
 @app.before_request
 def before_request():
+ if request.url.split('://')[0]=='http' and force_https==True:
+        url = request.url.replace('http://', 'https://', 1)
+        code = 301
+        return redirect(url, code=code)
  real_path="/"+"/".join([ x for x in request.path.split('/') if x.strip()!=""])
  if list_contains( authenticated_endpoints, real_path)==True and validate_logged_in(session)==False:
   return redirect(login_endpoint)
@@ -469,50 +489,6 @@ def download_this(path):
   if os.path.exists(path):
    return send_file(path, as_attachment=True)
  return "Not Found",404
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#STOOOOOOOOOOOOOOOOOOOOP !! xD
-
-
-#Your work starts here champ !! Set your routes
- 
-"""+s+"""
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -559,16 +535,48 @@ def downloads(file):
 
 
 
+
+
+
 #configuring the app to be as specified in the "config.json" file
 
 
-app.secret_key =app_conf["secret_key"]
-app.config['TESTING'] =app_conf["testing"]
-app.config['FLASK_ENV'] =app_conf["flask_env"]
-app.permanent_session_lifetime = datetime.timedelta(**app_conf["session_timeout"])
+app.config.update(**server_conf)
+
+app.permanent_session_lifetime = datetime.timedelta(**session_timeout)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#STOOOOOOOOOOOOOOOOOOOOP !! xD
+
+
+#Your work starts here lads !! Set your routes
+ 
+"""+s+"""
+
+
+
+
+
+
 
 if __name__ == '__main__':
-   app.run(host=app_conf["host"],port=app_conf["port"],debug = app_conf["debug"],threaded=app_conf["threaded"],ssl_context=app_conf["ssl_context"])
+   app.run(host=app_conf["host"],port=app_conf["port"],threaded=app_conf["threaded"],ssl_context=app_conf["ssl_context"])
 """
  f = open(configs["app"].get('name','')+".py", "w")
  f.write(script)
@@ -601,7 +609,7 @@ def init_configs():
         {
          "name":
                 "app",
-         "configs":{
+         "run":{
                 "host":
                         "0.0.0.0",
                 "port":
@@ -610,20 +618,42 @@ def init_configs():
                         True,
                 "ssl_context":
                         None,
-                "secret_key":
-                    random_string(random.randint(30,50)),
-                "debug":
-                    True,
-                "testing":
-                    True,
-                "flask_env":
-                    'development',
-                "session_timeout":
-                        {
-                            "days":
-                                    365,
-                        }
-                    },
+                },
+         "config":{
+                'ENV': 'production', 
+                'DEBUG': True, 
+                'TESTING': True, 
+                'PROPAGATE_EXCEPTIONS': None, 
+                'PRESERVE_CONTEXT_ON_EXCEPTION': None, 
+                'SECRET_KEY': random_string(random.randint(30,50)), 
+                'USE_X_SENDFILE': False, 
+                'SERVER_NAME': None, 
+                'APPLICATION_ROOT': '/', 
+                'SESSION_COOKIE_NAME': 'session', 
+                'SESSION_COOKIE_DOMAIN': None, 
+                'SESSION_COOKIE_PATH': None, 
+                'SESSION_COOKIE_HTTPONLY': True, 
+                'SESSION_COOKIE_SECURE': None, 
+                'SESSION_COOKIE_SAMESITE': 'Strict', 
+                'SESSION_REFRESH_EACH_REQUEST': True, 
+                'MAX_CONTENT_LENGTH': None, 
+                'SEND_FILE_MAX_AGE_DEFAULT': None, 
+                'TRAP_BAD_REQUEST_ERRORS': None, 
+                'TRAP_HTTP_EXCEPTIONS': False, 
+                'EXPLAIN_TEMPLATE_LOADING': False, 
+                'PREFERRED_URL_SCHEME': 'http', 
+                'JSON_AS_ASCII': True, 
+                'JSON_SORT_KEYS': True, 
+                'JSONIFY_PRETTYPRINT_REGULAR': False, 
+                'JSONIFY_MIMETYPE': 'application/json', 
+                'TEMPLATES_AUTO_RELOAD': None, 
+                'MAX_COOKIE_SIZE': 4093, 
+                'FLASK_ENV': 'development'
+                },
+        "session_timeout":
+                {
+                    "days": 30
+                },
         "public_routes":
             ["/"],
         "authenticated_routes":
