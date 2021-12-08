@@ -114,7 +114,7 @@ def create_app_script(configs):
  s=""
  for x in r:
   a=re.findall(r'<[^>]*>',x)
-  params=",".join([ i.replace('<','').replace('>','').split(':')[0] for i in a])
+  params=",".join([ i.replace('{','').replace('}','').replace('<','').replace('>','').split(':')[0] for i in a])
   x="/"+"/".join([ i for i in x.split('/') if i.strip()!=""])
   if x[:1]!="/":
    x="/"+x
@@ -131,7 +131,7 @@ def {}({}):
 @endpoints_limiter.limit("3600/hour")
 def {}({}):
  return ""
-""".format(x,x[1:].replace('/','_').replace('<','').replace('>','').replace(':','_'),params)
+""".format(x,x[1:].replace('{','').replace('}','').replace('/','_').replace('<','').replace('>','').replace(':','_'),params)
  script="""from flask import Flask, render_template, request,send_file,Response,redirect,session
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import  FileStorage
@@ -141,7 +141,9 @@ import flask_recaptcha
 import flask_limiter
 from flask_limiter.util import get_remote_address
 
-import json,os,random,sys,datetime,ssl
+import flask_mail
+
+import json,os,random,sys,datetime,ssl,mimetypes
 
 import sanitizy
 
@@ -243,6 +245,21 @@ recaptcha =flask_recaptcha.ReCaptcha(app)
 
 
 
+
+#configuring the app to be as specified in the "config.json" file
+
+
+app.config.update(**server_conf)
+
+app.permanent_session_lifetime = datetime.timedelta(**session_timeout)
+
+
+
+Flask_Mailler = flask_mail.Mail(app)
+
+
+
+
 #general Model class to have any arributes for any model
 
 class General_Model:
@@ -250,11 +267,14 @@ class General_Model:
   self.__dict__.update(kwargs)
 
 
-#a class when initialized session, will store the CSRF's parameter name and the value which can be passed to the template to add to the form 
-class CSRF_TOKEN:
- def __init__(self,s):
-  self.name=csrf_token_name
-  self.value=s.get(csrf_token_name,"")
+
+
+def read_file(fl):
+ with open(fl,'rb') as f:
+    content = f.read()
+    f.close()
+ return content
+
 
 #function to generate random string
 def random_string(s):
@@ -307,7 +327,7 @@ def login():
 '''
 
 def is_logged_in(s,variables={}):
- csrf=random_string(random.randint(30,40))
+ csrf=random_string(random.randint(64))
  s[csrf_token_name]=csrf
  s[session_login_indicator]=True
  set_session_variables(s,variables)
@@ -458,6 +478,23 @@ def database_fetch_all(sql,*args):
  return r
 
 
+
+
+
+def send_mail(subject='',sender=app.config['MAIL_USERNAME'],recipients=[],body='',html='',attachements=[]):
+   if recipients==None or len(recipients)==0:
+    raise Exception("You need to set a least 1 recipient !!")
+   if type(recipients)==str:
+    recipients=[recipients]
+   msg = flask_mail.Message(subject, sender = sender, recipients = recipients)
+   msg.body=body
+   msg.html = html
+   for x in  attachements:
+    msg.attach(os.path.split(x)[1],mimetypes.guess_type(x)[0],read_file(x))  
+   Flask_Mailler.send(msg)
+
+
+
 #print(database_fetch_all('select * from users_example where id=?',(1,)))
 
 #make sure everything is alright before doing anything
@@ -518,7 +555,7 @@ def statics(template,ext):
  if ext not in templates_extensions:
   return "Not Found",404
  template+="."+ext
- params={}
+ params={'session':session}
  try:
   return render_template(template,**params)
  except:
@@ -555,13 +592,6 @@ def downloads(file):
 
 
 
-
-#configuring the app to be as specified in the "config.json" file
-
-
-app.config.update(**server_conf)
-
-app.permanent_session_lifetime = datetime.timedelta(**session_timeout)
 
 
 
@@ -640,8 +670,8 @@ def init_configs():
                 },
          "config":{
                 'ENV': 'production', 
-                'DEBUG': True, 
-                'TESTING': True, 
+                'DEBUG': False, 
+                'TESTING': False, 
                 'PROPAGATE_EXCEPTIONS': None, 
                 'PRESERVE_CONTEXT_ON_EXCEPTION': None, 
                 'SECRET_KEY': random_string(64), 
@@ -670,7 +700,13 @@ def init_configs():
                 'FLASK_ENV': 'development',
                 'MAX_CONTENT_LENGTH': 50 * 1024 * 1024,
                 'RECAPTCHA_SITE_KEY':None,
-                'RECAPTCHA_SECRET_KEY':None
+                'RECAPTCHA_SECRET_KEY':None,
+                'MAIL_SERVER':'smtp.gmail.com',
+                'MAIL_PORT':465,
+                'MAIL_USERNAME':'flask.plus@gmail.com',
+                'MAIL_PASSWORD':'Flaskplus99',
+                'MAIL_USE_TLS':False,
+                'MAIL_USE_SSL':True
                 },
         "session_timeout":
                 {
@@ -695,7 +731,7 @@ def init_configs():
         "downloads":
             [],
         "requirements":
-            ["flask","sanitizy","flask-limiter","Flask-reCaptcha"],
+            ["flask","sanitizy","flask-limiter","Flask-reCaptcha","Flask-Mail","psycopg2","pyodbc"],
         "pip":
             "pip3"
         },
