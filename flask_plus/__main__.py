@@ -90,10 +90,11 @@ def read_configs():
 
 def create_app_script(configs):
  login_redirect="/"
- if configs["app"].get('templates',[])!=[]:
-  login_redirect=configs["app"]['templates'][0]
- elif list(dict.fromkeys(configs["app"].get("public_routes",[])+configs["app"].get("authenticated_routes",[])+configs["app"].get("csrf_routes",[])))!=[]:
-  login_redirect=list(dict.fromkeys(configs["app"].get("public_routes",[])+configs["app"].get("authenticated_routes",[])+configs["app"].get("csrf_routes",[])))[0]
+ if configs["app"].get('public_templates',[])!=[]:
+  login_redirect=configs["app"]['public_templates'][0]
+ home_page='""'
+ if login_redirect!="/":
+  home_page="render_template('"+login_redirect+"')"
  db_con=configs[configs["database"].get("database_type",'sqlite')].get("connection",{})
  if type(db_con)==str:
   db_con=str(json.dumps(db_con))
@@ -108,7 +109,7 @@ def create_app_script(configs):
   f.write('{}\n'.format(x))
  f.close()
  install(configs["app"].get("pip","pip3"))
- r=list(dict.fromkeys(configs["app"].get("public_routes",[])+configs["app"].get("authenticated_routes",[])+configs["app"].get("csrf_routes",[])))
+ r=list(dict.fromkeys(configs["app"].get("public_routes",[])+configs["app"].get("authenticated_routes",[])))
  if r==[]:
   r=["/"]
  s=""
@@ -123,15 +124,15 @@ def create_app_script(configs):
 @app.route('{}',methods=["GET","POST"])
 @endpoints_limiter.limit("3600/hour")
 def {}({}):
- return ""
-""".format("/","home_root",'')
+ return {}
+""".format("/","home_root",'',home_page)
   else:
    s+="""
 @app.route('{}',methods=["GET","POST"])
 @endpoints_limiter.limit("3600/hour")
 def {}({}):
  return ""
-""".format(x,x[1:].replace('{','').replace('}','').replace('/','_').replace('<','').replace('>','').replace(':','_'),params)
+""".format(x,x[1:].replace('{','').replace('}','').replace('/','_').replace('<','').replace('>','').replace(':','_').replace('.',''),params)
  script="""from flask import Flask, render_template, request,send_file,Response,redirect,session
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import  FileStorage
@@ -147,6 +148,10 @@ import json,os,random,sys,datetime,ssl,mimetypes
 
 import sanitizy
 
+sqlite3=None
+pyodbc=None
+pymysql=None
+psycopg2=None
 
 import """+configs[configs["database"].get("database_type",'sqlite')].get("database_connector",'sqlite3')+"""
 
@@ -221,10 +226,10 @@ accepted_domains=[]
 recaptcha_endpoints="""+str([ "/"+"/".join([ i for i in x.split('/') if i.strip()!=""]) for x in configs["app"].get("recaptcha_routes",[])])+"""
 
 #the routes which must be validated against CSRF
-csrf_endpoints="""+str([ "/"+"/".join([ i for i in x.split('/') if i.strip()!=""]) for x in configs["app"].get("csrf_routes",[])])+"""
+csrf_endpoints="""+str([ "/"+"/".join([ i for i in x.split('/') if i.strip()!=""]) for x in configs["app"].get("authenticated_routes",[])+configs["app"].get("authenticated_templates",[])])+"""
 
 #the routes which the user must be logged in to access them
-authenticated_endpoints="""+str([ "/"+"/".join([ i for i in x.split('/') if i.strip()!=""]) for x in configs["app"].get("authenticated_routes",[])])+"""
+authenticated_endpoints="""+str([ "/"+"/".join([ i for i in x.split('/') if i.strip()!=""]) for x in configs["app"].get("authenticated_routes",[])+configs["app"].get("authenticated_templates",[])])+"""
 
 #the name of the session variable that tells if the user is logged in or not
 session_login_indicator="logged_in"
@@ -327,7 +332,7 @@ def login():
 '''
 
 def is_logged_in(s,variables={}):
- csrf=random_string(random.randint(64))
+ csrf=random_string(64)
  s[csrf_token_name]=csrf
  s[session_login_indicator]=True
  set_session_variables(s,variables)
@@ -530,6 +535,16 @@ def add_header(response):
 
 
 
+@app.errorhandler(429)
+def ratelimit_handler(e):
+  return "No more requests for you :)",429
+
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return "Page not found", 404
+
+
 def return_json(data):
  response = app.response_class(
         response=json.dumps(data,default=str),
@@ -638,8 +653,8 @@ if __name__ == '__main__':
    f.write(x[1])
    f.close()
  os.makedirs("static", exist_ok=True)
- if configs["app"].get('templates',None)!=None:
-  for x in configs["app"]["templates"]:
+ if configs["app"].get('public_templates',[])+configs["app"].get('authenticated_templates',[])!=[]:
+  for x in configs["app"].get('public_templates',[])+configs["app"].get('authenticated_templates',[]):
    f = open("templates/"+x, "w")
    f.close()
  if configs["app"].get('static',None)!=None:
@@ -716,22 +731,20 @@ def init_configs():
             ["/"],
         "authenticated_routes":
             [],
-        "csrf_routes":
-            [],
         "recaptcha_routes":
             [],
-        "rate_limited_routes":
-            [("/","1/day")],
-        "templates":
+        "public_templates":
             ["index.html"],
+        "authenticated_templates":
+            [],
         "static":
-            ["style.css","style.js"],
+            ["style.css"],
         "uploads":
             [],
         "downloads":
             [],
         "requirements":
-            ["flask","sanitizy","flask-limiter","Flask-reCaptcha","Flask-Mail","psycopg2","pyodbc"],
+            ["flask","sanitizy","flask-limiter","Flask-reCaptcha","Flask-Mail","werkzeug","gunicorn","itsdangerous","Jinja2"],
         "pip":
             "pip3"
         },
@@ -909,12 +922,14 @@ def main():
   try:
    init_app()
   except Exception as e:
+   print(e)
    help_msg('Missing configs ! Try runing: '+sys.argv[0]+' init config')
   sys.exit()
  if sys.argv[1]=="db" and sys.argv[2] in supported_dbs:
   try:
    conf=read_configs()
-  except:
+  except Exception as ex:
+   print(ex)
    print('Failed to load configs !! Try to run first: '+sys.argv[0]+' init')
    sys.exit()
   if  sys.argv[2]=="sqlite":
