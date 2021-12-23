@@ -5,6 +5,9 @@ flask_plus_version="Flask_Plus_Python"
 def install(p):
     os.system(p+" install -r requirements.txt")
 
+def is_file_exists(path):
+ return os.path.exists(path)
+ 
 
 def create_file(w):
     direc,file=os.path.split(w)
@@ -567,6 +570,9 @@ def random_string(s):
  return ''.join([random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890') for x in range(s)])
 
 
+def is_file_exists(path):
+ return os.path.exists(path)
+
 def unescape_sqli(s):
  return sanitizy.SQLI.unescape(s)
 
@@ -957,13 +963,16 @@ if __name__ == '__main__':
    f.write(x[1])
    f.close()"""
  os.makedirs("static", exist_ok=True)
- if configs["app"].get('public_templates',[])+configs["app"].get('authenticated_templates',[])!=[]:
-  for x in configs["app"].get('public_templates',[])+configs["app"].get('authenticated_templates',[]):
-   create_file("templates/"+x)
+ if configs["app"].get('templates',[])!=[]:
+  for x in configs["app"].get('templates',[]):
+   if is_file_exists("templates/"+x)==False:
+    create_file("templates/"+x)
  if configs["app"].get('static',None)!=None:
   for x in configs["app"]["static"]:
-   create_file("static/"+x)
-  
+   if is_file_exists("static/"+x)==False:
+    create_file("static/"+x)
+ write_file('Procfile','web: gunicorn app:app')
+
 
 
 
@@ -1034,7 +1043,7 @@ def init_configs():
         "templates":
             ["index.html"],
         "static":
-            ["style.css"],
+            ["css/style.css","js/code.js","img/img.jpg"],
         "uploads":
             [],
         "requirements":
