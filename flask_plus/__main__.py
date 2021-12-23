@@ -1,13 +1,29 @@
 import json,pymysql,random,time,sqlite3,sys,re,os,pip,psycopg2,pyodbc,datetime
 
-flask_plus_version="Flask_plus Python"
+flask_plus_version="Flask_Plus_Python"
 
 def install(p):
     os.system(p+" install -r requirements.txt")
 
 
+def create_file(w):
+    direc,file=os.path.split(w)
+    try:
+        os.makedirs(direc, exist_ok=True)
+    except:
+        pass
+    with open(w ,"a+") as f:
+     pass
+    f.close()
+
+def write_file(f,s):
+ create_file(f)
+ f = open(f, "w")
+ f.write(s)
+ f.close()
+
 def random_string(s):
- return ''.join([random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890%;,:?.@|[]{}#!<>&-+/*$') for x in range(s)])
+ return ''.join([random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890') for x in range(s)])
 
 def create_mysql_db(d,connector):
   if type(d)==str:
@@ -90,8 +106,8 @@ def read_configs():
 
 def create_app_script(configs):
  login_redirect="/"
- if configs["app"].get('public_templates',[])!=[]:
-  login_redirect=configs["app"]['public_templates'][0]
+ if configs["app"].get('templates',[])!=[]:
+  login_redirect=configs["app"]['templates'][0]
  home_page='""'
  if login_redirect!="/":
   home_page="render_template('"+login_redirect+"')"
@@ -109,10 +125,28 @@ def create_app_script(configs):
   f.write('{}\n'.format(x))
  f.close()
  install(configs["app"].get("pip","pip3"))
- r=list(dict.fromkeys(configs["app"].get("public_routes",[])+configs["app"].get("authenticated_routes",[])))
+ r=list(dict.fromkeys(configs["app"].get('templates',[])))
  if r==[]:
   r=["/"]
- s=""
+ s1="""from wrappers import *
+"""
+ for x in r:
+  if x[:1]!="/":
+   x="/"+x
+  s1+="""
+
+@app.route('{}',methods=["GET","POST"])
+@endpoints_limiter.limit("3600/hour")
+def {}():
+ data={{"session":General_Model(**session),"title":"{}"}}
+ return render_template("{}",**data)
+
+""".format(x,x[1:].replace('.','_').replace("/","_"),x.split("/")[-1].split('.')[0].replace("_"," ").replace("/"," ").strip(),x)
+ r=list(dict.fromkeys(configs["app"].get("routes",[])))
+ if r==[]:
+  r=["/"]
+ s2="""from wrappers import *
+"""
  for x in r:
   a=re.findall(r'<[^>]*>',x)
   params=",".join([ i.replace('{','').replace('}','').replace('<','').replace('>','').split(':')[0] for i in a])
@@ -120,20 +154,25 @@ def create_app_script(configs):
   if x[:1]!="/":
    x="/"+x
   if x=="/":
-   s+="""
+   s2+="""
+
 @app.route('{}',methods=["GET","POST"])
 @endpoints_limiter.limit("3600/hour")
 def {}({}):
  return {}
+
 """.format("/","home_root",'',home_page)
   else:
-   s+="""
+   s2+="""
+
 @app.route('{}',methods=["GET","POST"])
 @endpoints_limiter.limit("3600/hour")
 def {}({}):
  return ""
-""".format(x,x[1:].replace('{','').replace('}','').replace('/','_').replace('<','').replace('>','').replace(':','_').replace('.',''),params)
- script="""from flask import Flask, render_template, request,send_file,Response,redirect,session
+
+""".format(x.replace('.','_'),x[1:].replace('{','').replace('}','').replace('/','_').replace('<','').replace('>','').replace(':','_').replace('.',''),params)
+ script1="""import flask
+from flask import Flask, request,send_file,Response,redirect,session
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import  FileStorage
 
@@ -144,7 +183,10 @@ from flask_limiter.util import get_remote_address
 
 import flask_mail
 
-import json,os,random,sys,datetime,ssl,mimetypes
+import json,os,random,sys,datetime,ssl,mimetypes,time,logging
+
+from logging.handlers import RotatingFileHandler
+
 
 import sanitizy
 
@@ -155,6 +197,135 @@ psycopg2=None
 
 import """+configs[configs["database"].get("database_type",'sqlite')].get("database_connector",'sqlite3')+"""
 
+
+import hashlib,functools 
+
+from itsdangerous import URLSafeTimedSerializer
+from flask.sessions import TaggedJSONSerializer
+"""
+
+ wrappers="""from handlings import *
+
+
+def private(f):
+ @functools.wraps(f)
+ def validate(*args, **kwargs):
+  if validate_logged_in(session)==True:
+   return f()
+  else:
+   return redirect(login_endpoint)
+ return validate
+
+
+def valid_authorization(f):
+ @functools.wraps(f)
+ def validate(*args, **kwargs):
+  token=request.headers.get("Authorization",'')
+  if len(token)==0:
+   return "Invalid Token",401
+  try:
+   cookie=decode_flask_token(token)
+  except:
+   return "Invalid Token",401
+  if validate_logged_in(cookie)==True:
+   return f()
+  else:
+   return "Invalid Token",401
+ return validate
+
+
+
+def safe_args(f):
+ @functools.wraps(f)
+ def validate(*args, **kwargs):
+  request.args=sanitizy.SQLI.escape_args(request)
+  return f()
+  
+
+def safe_form(f):
+ @functools.wraps(f)
+ def validate(*args, **kwargs):
+  request.form=sanitizy.SQLI.escape_form(request)
+  return f()
+
+
+def safe_request(f):
+ @functools.wraps(f)
+ def validate(*args, **kwargs):
+  request.form=sanitizy.SQLI.escape_form(request)
+  request.args=sanitizy.SQLI.escape_args(request)
+  return f()
+
+
+def safe_files(f):
+ @functools.wraps(f)
+ def validate(*args, **kwargs):
+  if sanitizy.FILE_UPLOAD.validate_form(request)==True:
+   return f()
+  else:
+   return "Unacceptable Files",401
+ return validate
+
+
+def valid_recaptcha(f):
+ @functools.wraps(f)
+ def validate(*args, **kwargs):
+  if recaptcha.verify():
+   return f()
+  else:
+   return "Invalid recaptcha",401
+ return validate
+
+
+
+def valid_referer(f):
+ @functools.wraps(f)
+ def validate(*args, **kwargs):
+  if csrf_referer_checker(request,allowed_domains=accepted_domains)==True:
+   return f()
+  else:
+   return " Invalid request source",401
+ return validate
+
+
+
+def valid_origin(f):
+ @functools.wraps(f)
+ def validate(*args, **kwargs):
+  validate_origin_header
+  if validate_origin_header(request,allowed_domains=accepted_domains)==True:
+   return f()
+  else:
+   return " Invalid request source",401
+ return validate
+
+
+
+
+def valid_csrf_token(f):
+ @functools.wraps(f)
+ def validate(*args, **kwargs):
+  if csrf_token_checker(request,session)==True:
+   return f()
+  else:
+   return " Invalid request source",401
+ return validate
+
+def render_template(t,**kwargs):
+ try:
+  return flask.render_template(t,**kwargs)
+ except Exception as e:
+  print(e)
+  return 'Template not found'
+
+"""
+ script2="""from imports import *
+#Don't touch what's below unless you know what you are doing :)
+
+
+flask_default_salt = 'cookie-session'
+
+
 app = Flask(__name__)
 
 
@@ -164,87 +335,160 @@ endpoints_limiter=flask_limiter.Limiter(app, key_func=get_remote_address, defaul
 server_signature='"""+flask_plus_version+"""'
 
 
-#Keep going down untill I tell you to stop.. Don't touch what's below unless you know what you are doing :)
-
-
 
 
 #global important variables
 
 
+allowed_file_extensions=['png','jpg','jpeg','gif','pdf']
+
+
+allowed_mimetypes_=["application/pdf","application/x-pdf","image/png","image/jpg","image/jpeg"]
+
+
+
 permanent_session=True
 
-additional_headers={'X-Frame-Options':'SAMEORIGIN','Content-Security-Policy': "default-src 'self'",'X-Content-Type-Options': 'nosniff','Referrer-Policy': 'same-origin','Server':server_signature,'X-XSS-Protection': '0','X-Permitted-Cross-Domain-Policies': 'none','Permissions-Policy': "geolocation 'none'; camera 'none'; speaker 'none';"}
+
+
+additional_headers={'X-Frame-Options':'SAMEORIGIN','X-Content-Type-Options': 'nosniff','Referrer-Policy': 'same-origin','Server':server_signature,'X-Permitted-Cross-Domain-Policies': 'none','Permissions-Policy': "geolocation 'none'; camera 'none'; speaker 'none';"}
+
+
+whitelist_external_sources=False
+
+
+js_domains=['ajax.googleapis.com','www.google-analytics.com','cdn.jsdelivr.net','unpkg.com','cdnjs.cloudflare.com']
+
+
+script_src="script-src 'self' "
+
+
+
+if len(js_domains)>0:
+ script_src+=' '.join(js_domains)
+
+
+style_domains=['cdn.jsdelivr.net']
+
+
+
+style_src="style-src 'self' "
+
+
+if len(js_domains)>0:
+ style_src+=' '.join(style_domains)
+
+
+
+font_domains=[]
+
+
+font_src="font-src 'self' "
+
+if len(font_domains)>0:
+ font_src+=' '.join(font_domains)
+
+
+
+img_domains=[]
+
+
+img_src="font-src 'self' "
+
+if len(img_domains)>0:
+ img_src+=' '.join(img_domains)
+
+
+if whitelist_external_sources==True:
+ additional_headers.update({'X-XSS-Protection': '0','Content-Security-Policy': " ; ".join([script_src,style_src,font_src,img_src])})
+
 
 unwanted_headers=[]
 
+
 app_conf="""+str(configs["app"]["run"])+"""
+
 
 server_conf="""+str(configs["app"]["config"])+"""
 
+
 session_timeout="""+str(configs["app"]["session_timeout"])+"""
 
+
 force_https=True if app_conf['ssl_context']!=None else False
+
 
 hsts_enabled=True if app_conf['ssl_context']!=None else False
 
 if hsts_enabled==True:
  additional_headers.update({'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload'})
 
+
+
 #the folder where you store the files that are accesible to the users to download
-downloads_folder="downloads"
+
+downloads_folder="uploads"
+
 
 #sensitive files that shouldn't be accessed by the user (downloaded for example)
+
 sensitive_files=('pyc','.py', '.sql','.db')
+
 
 basedir=os.getcwd()
 
+
 #the templates' folder
+
 templates_folder="templates"
 
+
 #the static files' folder
+
 statics_folder="static"
 
+
 #the folder where you store the files that are were uploaded by the users
+
 uploads_folder="uploads"
 
-#the allowed templates' extensions to not confuse them with other routes
-templates_extensions=("html","xml")
 
 #the CSRF token's name where will be used it the: session,forms, and as POST parameter
+
 csrf_token_name="csrf_token"
 
-#check if there is a CSRF by the "Referer" header (in case you don't want to use the CSRF Token
-csrf_referer_check=True
-
-#check if there is a CSRF by the token
-csrf_token_check=False
 
 #Domains/Subdomains that are allowed to send POST requests
+
 accepted_domains=[]
 
-recaptcha_endpoints="""+str([ "/"+"/".join([ i for i in x.split('/') if i.strip()!=""]) for x in configs["app"].get("recaptcha_routes",[])])+"""
 
-#the routes which must be validated against CSRF
-csrf_endpoints="""+str([ "/"+"/".join([ i for i in x.split('/') if i.strip()!=""]) for x in configs["app"].get("authenticated_routes",[])+configs["app"].get("authenticated_templates",[])])+"""
 
-#the routes which the user must be logged in to access them
-authenticated_endpoints="""+str([ "/"+"/".join([ i for i in x.split('/') if i.strip()!=""]) for x in configs["app"].get("authenticated_routes",[])+configs["app"].get("authenticated_templates",[])])+"""
 
 #the name of the session variable that tells if the user is logged in or not
+
+
 session_login_indicator="logged_in"
 
+
+
 #the endpoint which the user will be redirected if he accessed a page which requires authentication
+
 login_endpoint='"""+login_redirect+"""'
+
 
 
 database_type='"""+configs["database"].get("database_type",'sqlite')+"""'
 
+
 database_connector="""+configs[configs["database"].get("database_type",'sqlite')].get("database_connector",'sqlite3')+"""
+
 
 database_credentials="""+db_con+"""
 
+
 database_structure="""+str(configs["database"]["tables_names"])+"""
+
 
 recaptcha =flask_recaptcha.ReCaptcha(app)
 
@@ -256,21 +500,40 @@ recaptcha =flask_recaptcha.ReCaptcha(app)
 
 app.config.update(**server_conf)
 
+
 app.permanent_session_lifetime = datetime.timedelta(**session_timeout)
 
 
 
+
 Flask_Mailler = flask_mail.Mail(app)
-
-
-
+"""
+ script3="""from settings import *
 
 #general Model class to have any arributes for any model
 
 class General_Model:
+
  def __init__(self,**kwargs):
+  for x in kwargs:
+   if type(kwargs[x])==str:
+    kwargs[x]=sanitizy.SQLI.unescape(kwargs[x])
   self.__dict__.update(kwargs)
 
+
+
+
+#https://gist.github.com/babldev/502364a3f7c9bafaa6db
+
+
+def decode_flask_token(cookie_str,secret_key=server_conf["SECRET_KEY"]):
+    serializer = TaggedJSONSerializer()
+    signer_kwargs = {
+        'key_derivation': 'hmac',
+        'digest_method': hashlib.sha1
+    }
+    s = URLSafeTimedSerializer(secret_key, salt=flask_default_salt, serializer=serializer, signer_kwargs=signer_kwargs)
+    return s.loads(cookie_str)
 
 
 
@@ -281,9 +544,32 @@ def read_file(fl):
  return content
 
 
+
+def get_real_uri(r):
+ return "/"+"/".join([ x for x in r.path.split('/') if x.strip()!=""])
+
+
+def validate_origin_header(obj,allowed_domains=[]):
+        domains=[obj.host] if (not allowed_domains or len(allowed_domains)==0) else allowed_domains
+        referer=obj.headers.get('Origin','')
+        if referer.strip()=="" or referer.strip().lower()=="null":
+            return False
+        a=referer.split("://")[1].split("/")[0]
+        if a not in domains:
+            return False
+        return True
+
+
+
 #function to generate random string
+
 def random_string(s):
- return ''.join([random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890%;,:?.@|[]{}#!<>&-+/*$') for x in range(s)])
+ return ''.join([random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890') for x in range(s)])
+
+
+def unescape_sqli(s):
+ return sanitizy.SQLI.unescape(s)
+
 
 
 def set_headers(h,d):
@@ -296,8 +582,10 @@ def unset_headers(h,d):
   h[x]=''
 
 
+
 def set_cookie(r,k,v,attributes):
  r.set_cookie(k, v , **attributes)
+
 
 
 def set_session_variables(s,d):
@@ -306,11 +594,15 @@ def set_session_variables(s,d):
  s.modified = True
  s.permanent = permanent_session
 
+
+
 def reset_session(s):
  s.clear()
  s.modified = True
  s.permanent = permanent_session
  
+
+
 #security checks
 
 def csrf_token_checker(r,s):
@@ -331,6 +623,7 @@ def login():
 
 '''
 
+
 def is_logged_in(s,variables={}):
  csrf=random_string(64)
  s[csrf_token_name]=csrf
@@ -338,6 +631,8 @@ def is_logged_in(s,variables={}):
  set_session_variables(s,variables)
  s.modified = True
  s.permanent = permanent_session
+
+
 
 
 '''
@@ -352,6 +647,7 @@ def logout():
 
 '''
 
+
 def is_not_logged_in(s):
  s[csrf_token_name]=""
  s[session_login_indicator]=False
@@ -360,127 +656,73 @@ def is_not_logged_in(s):
  s.permanent = permanent_session
 
 
+
+
 def validate_logged_in(s):
  return s.get(session_login_indicator,False)
+
+
 
 
 def secure_filename(f):
  return sanitizy.FILE_UPLOAD.secure_filename(f)
 
+
+
+
 def csrf_referer_checker(req,allowed_domains=[]):
  return sanitizy.CSRF.validate_flask(req,allowed_domains=allowed_domains)
+
+
 
 
 def no_xss(s):
  return sanitizy.XSS.escape(s)
 
  
+
+
 def no_sqli(s):
  return sanitizy.SQLI.escape(s)
+
+
 
 
 def valid_uploaded_file(f,allowed_extensions=['png','jpg','jpeg','gif','pdf'],allowed_mimetypes=["application/pdf","application/x-pdf","image/png","image/jpg","image/jpeg"]):
  return sanitizy.FILE_UPLOAD.check_file(f,allowed_extensions=allowed_extensions,allowed_mimetypes=allowed_mimetypes)
 
 
+
 #automatically save any file to the uploads folder
+
 
 def save_file(f,path=uploads_folder):
  os.makedirs(path, exist_ok=True)
  return sanitizy.FILE_UPLOAD.save_file(f,path=path)
 
 
+
+
 def no_lfi(path):
  return sanitizy.PATH_TRAVERSAL.check(path)
 
-def no_ssrf(p,url=True):
- return sanitizy.SSRF.validate(p,url=url)
 
 
-def is_safe_path( path):
-  return os.path.realpath(path).startswith(basedir)
+
+def no_ssrf(p):
+ return sanitizy.SSRF.validate(p)
+
+
+
+def is_safe_path( path,root_dir=downloads_folder):
+  return os.path.realpath(path).startswith(basedir+'\\\\'+root_dir if ((sys.platform.lower() == "win32") or( sys.platform.lower() == "win64")) else basedir+'/'+root_dir)
+
 
 
 
 
 def list_contains(l,s):
  return any(x.startswith(s) for x in l)
-
-
-
-
-def get_database_connection():
- if type(database_credentials)==str:
-   d=database_connector.connect(database_credentials)
-   if database_connector==psycopg2:
-    d.set_session(autocommit=True)
-   else:
-    d.autocommit=True
-   return d
- if database_type!="sqlite":
-  return  database_connector.connect(**database_credentials)
- return database_connector.connect(database_credentials['file'],isolation_level=database_credentials['isolation_level'])
-
-
-def get_connection_cursor(c):
- return c.cursor()
- 
-def close_object(c):
- c.close()
-
-
-#print(get_database_connection())
-
-
-def database_execute(sql,*args):
- a=[]
- if args:
-  if args[0]!=None:
-   a=args[0]
- c=get_database_connection()
- cur=get_connection_cursor(c)
- cur.execute(sql,a)
- close_object(cur)
- close_object(c)
- 
-
-def database_executemany(sql,*args):
- a=[]
- if args:
-  if args[0]!=None:
-   a=args[0]
- c=get_database_connection()
- cur=get_connection_cursor(c)
- cur.executemany(sql,a)
- close_object(cur)
- close_object(c)
-
-
-def database_fetch_one(sql,*args):
- a=[]
- if args:
-  if args[0]!=None:
-   a=args[0]
- c=get_database_connection()
- cur=get_connection_cursor(c)
- cur.execute(sql,a)
- r=cur.fetchone()
- close_object(cur)
- close_object(c)
- return r
- 
-def database_fetch_all(sql,*args):
- a=[]
- if args:
-  if args[0]!=None:
-   a=args[0]
- c=get_database_connection()
- cur=get_connection_cursor(c)
- cur.execute(sql,a)
- r=cur.fetchall()
- close_object(cur)
- close_object(c)
- return r
 
 
 
@@ -497,12 +739,114 @@ def send_mail(subject='',sender=app.config['MAIL_USERNAME'],recipients=[],body='
    for x in  attachements:
     msg.attach(os.path.split(x)[1],mimetypes.guess_type(x)[0],read_file(x))  
    Flask_Mailler.send(msg)
+   
 
 
 
-#print(database_fetch_all('select * from users_example where id=?',(1,)))
 
+def download_this(path,root_dir=downloads_folder):
+ path=unescape_sqli(path)
+ if is_safe_path(path,root_dir=root_dir)==True:
+  if os.path.exists(path):
+   return send_file(path, as_attachment=True)
+ return "Not Found",404
+"""
+ db_s="""from utils import *
+ 
+
+def get_database_connection():
+ if type(database_credentials)==str:
+   d=database_connector.connect(database_credentials)
+   if database_connector==psycopg2:
+    d.set_session(autocommit=True)
+   else:
+    d.autocommit=True
+   return d
+ if database_type!="sqlite":
+  return  database_connector.connect(**database_credentials)
+ return database_connector.connect(database_credentials['file'],isolation_level=database_credentials['isolation_level'])
+
+
+
+def get_connection_cursor(c):
+ return c.cursor()
+ 
+
+def close_object(c):
+ c.close()
+
+
+
+def database_execute(sql,*args):
+ a=[]
+ if args:
+  if args[0]!=None:
+   a=args[0]
+ c=get_database_connection()
+ cur=get_connection_cursor(c)
+ cur.execute(sql,a)
+ close_object(cur)
+ close_object(c)
+ 
+
+
+def database_executemany(sql,*args):
+ a=[]
+ if args:
+  if args[0]!=None:
+   a=args[0]
+ c=get_database_connection()
+ cur=get_connection_cursor(c)
+ cur.executemany(sql,a)
+ close_object(cur)
+ close_object(c)
+
+
+
+def database_fetch_one(sql,*args):
+ a=[]
+ if args:
+  if args[0]!=None:
+   a=args[0]
+ c=get_database_connection()
+ cur=get_connection_cursor(c)
+ cur.execute(sql,a)
+ r=cur.fetchone()
+ close_object(cur)
+ close_object(c)
+ return r
+ 
+
+
+def database_fetch_all(sql,*args):
+ a=[]
+ if args:
+  if args[0]!=None:
+   a=args[0]
+ c=get_database_connection()
+ cur=get_connection_cursor(c)
+ cur.execute(sql,a)
+ r=cur.fetchall()
+ close_object(cur)
+ close_object(c)
+ return r
+
+
+"""
+ script4="""from database import *
 #make sure everything is alright before doing anything
+
+
+@app.url_value_preprocessor
+def sql_escape_url(endpoint, values):
+ path=get_real_uri(request)
+ if path.startswith('/static/')==False and path.startswith('/'+downloads_folder+'/')==False:
+  if values!=None:
+   for x in values:
+    values[x]=sanitizy.SQLI.escape(values[x])
+
+
+
 
 @app.before_request
 def before_request():
@@ -510,26 +854,21 @@ def before_request():
         url = request.url.replace('http://', 'https://', 1)
         code = 301
         return redirect(url, code=code)
- real_path="/"+"/".join([ x for x in request.path.split('/') if x.strip()!=""])
- if request.method=="POST" and list_contains( recaptcha_endpoints, real_path)==True:
-  if recaptcha.verify()==False:
-   return "Invalid reCaptcha",401
- if list_contains( authenticated_endpoints, real_path)==True and validate_logged_in(session)==False:
-  return redirect(login_endpoint)
- if request.method=="POST" and list_contains( csrf_endpoints, real_path)==True:
-  if csrf_referer_check==True:
-   if csrf_referer_checker(request,allowed_domains=accepted_domains)==False:
-    return "Unauthorised",401
-  if csrf_token_check==True:
-   if csrf_token_checker(request,session)==False:
-    return "Unauthorised",401
-   
+
+
 
 
 @app.after_request
 def add_header(response):
     set_headers(response.headers,additional_headers)
     unset_headers(response.headers,unwanted_headers)
+    dt=time.strftime('%Y-%b-%d')
+    timestamp = time.strftime('[%Y-%b-%d %H:%M]')
+    handler = RotatingFileHandler('logs/'+dt+'.log', maxBytes=100000, backupCount=3)
+    logger = logging.getLogger('tdm')
+    logger.setLevel(logging.ERROR)
+    logger.addHandler(handler)
+    logger.error('%s %s %s %s %s %s', timestamp, request.remote_addr, request.method, request.scheme, request.full_path, response.status)    
     return response
     
 
@@ -554,38 +893,28 @@ def return_json(data):
  return response
 
 
-def download_this(path):
- if is_safe_path(path)==True:
-  if os.path.exists(path):
-   return send_file(path, as_attachment=True)
- return "Not Found",404
-
-
-
-
-#automatically render any template in the templates folder
-
-@app.route('/<template>.<ext>', methods = ['GET','POST'])
-def statics(template,ext):
- if ext not in templates_extensions:
-  return "Not Found",404
- template+="."+ext
- params={'session':session}
- try:
-  return render_template(template,**params)
- except:
-  return "Not Found",404
-
 
 
 #automatically server any static file in the static folder
 
 @app.route('/static/<static_file>', methods = ['GET'])
-def static__(static_file):
+def static1__(static_file):
  path="{}/{}".format(statics_folder,static_file)
  if path.lower().endswith(sensitive_files):
    return "Not Found",404
- if is_safe_path(path)==True:
+ if is_safe_path(path,root_dir=statics_folder)==True:
+  if os.path.exists(path):
+   return send_file(path)
+ return "Not Found",404
+
+
+
+@app.route('/static/<file_type>/<static_file>', methods = ['GET'])
+def static2__(file_type,static_file):
+ path="{}/{}/{}".format(statics_folder,file_type,static_file)
+ if path.lower().endswith(sensitive_files):
+   return "Not Found",404
+ if is_safe_path(path,root_dir=statics_folder)==True:
   if os.path.exists(path):
    return send_file(path)
  return "Not Found",404
@@ -595,72 +924,45 @@ def static__(static_file):
 
 #automatically download any file in the downloads folder
 
-@app.route('/downloads/<file>', methods = ['GET'])
+@app.route('/'+downloads_folder+'/<file>', methods = ['GET'])
 def downloads(file):
  path="{}/{}".format(downloads_folder,file)
  if path.lower().endswith(sensitive_files):
    return "Not Found",404
  return download_this(path)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#STOOOOOOOOOOOOOOOOOOOOP !! xD
-
-
-#Your work starts here lads !! Set your routes
- 
-"""+s+"""
-
-
-
-
-
+"""
+ write_file("database.py",db_s)
+ write_file("wrappers.py",wrappers)
+ write_file("imports.py",script1)
+ write_file("settings.py",script2)
+ write_file("utils.py",script3)
+ write_file("handlings.py",script4)
+ write_file("templates.py",s1)
+ write_file("routes.py",s2)
+ write_file(configs["app"].get('name','')+".py","""from templates import *
+from routes import * 
 
 
 if __name__ == '__main__':
-   app.run(**app_conf)"""
- f = open(configs["app"].get('name','')+".py", "w")
- f.write(script)
- f.close()
+   app.run(**app_conf)
+""")
  os.makedirs("templates", exist_ok=True)
+ os.makedirs("logs", exist_ok=True)
  if configs["app"].get('uploads',None)!=None:
   os.makedirs("uploads", exist_ok=True)
- if configs["app"].get('downloads',None)!=None:
+ """if configs["app"].get('downloads',None)!=None:
   os.makedirs("downloads", exist_ok=True)
   for x in configs["app"]["downloads"]:
    f = open("downloads/"+x[0], "w")
    f.write(x[1])
-   f.close()
+   f.close()"""
  os.makedirs("static", exist_ok=True)
  if configs["app"].get('public_templates',[])+configs["app"].get('authenticated_templates',[])!=[]:
   for x in configs["app"].get('public_templates',[])+configs["app"].get('authenticated_templates',[]):
-   f = open("templates/"+x, "w")
-   f.close()
+   create_file("templates/"+x)
  if configs["app"].get('static',None)!=None:
   for x in configs["app"]["static"]:
-   f = open("static/"+x, "w")
-   f.close()
+   create_file("static/"+x)
   
 
 
@@ -685,7 +987,7 @@ def init_configs():
                 },
          "config":{
                 'ENV': 'production', 
-                'DEBUG': False, 
+                'DEBUG': True, 
                 'TESTING': False, 
                 'PROPAGATE_EXCEPTIONS': None, 
                 'PRESERVE_CONTEXT_ON_EXCEPTION': None, 
@@ -696,9 +998,9 @@ def init_configs():
                 'SESSION_COOKIE_NAME': 'FPSessionId', 
                 'SESSION_COOKIE_DOMAIN': None, 
                 'SESSION_COOKIE_PATH': None, 
-                'SESSION_COOKIE_HTTPONLY': True, 
+                'SESSION_COOKIE_HTTPONLY': False, 
                 'SESSION_COOKIE_SECURE': None, 
-                'SESSION_COOKIE_SAMESITE': 'Strict', 
+                'SESSION_COOKIE_SAMESITE': 'Lax', 
                 'SESSION_REFRESH_EACH_REQUEST': True, 
                 'MAX_CONTENT_LENGTH': None, 
                 'SEND_FILE_MAX_AGE_DEFAULT': None, 
@@ -727,21 +1029,13 @@ def init_configs():
                 {
                     "days": 30
                 },
-        "public_routes":
+        "routes":
             ["/"],
-        "authenticated_routes":
-            [],
-        "recaptcha_routes":
-            [],
-        "public_templates":
+        "templates":
             ["index.html"],
-        "authenticated_templates":
-            [],
         "static":
             ["style.css"],
         "uploads":
-            [],
-        "downloads":
             [],
         "requirements":
             ["flask","sanitizy","flask-limiter","Flask-reCaptcha","Flask-Mail","werkzeug","gunicorn","itsdangerous","Jinja2"],
