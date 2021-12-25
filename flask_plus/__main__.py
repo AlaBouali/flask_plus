@@ -768,8 +768,12 @@ def download_this(path,root_dir=downloads_folder):
  db_s="""from utils import *
 
 
+
 def pyodbc_to_dict(row):
     return dict(zip([t[0] for t in row.cursor_description], row))
+
+
+
 
 def get_database_connection():
  if type(database_credentials)==str:
@@ -786,6 +790,8 @@ def get_database_connection():
  return conn
 
 
+
+
 def get_connection_cursor(c):
  if database_type=="mysql":
   return c.cursor(pymysql.cursors.DictCursor)
@@ -794,8 +800,12 @@ def get_connection_cursor(c):
  return c.cursor()
  
 
+
+
 def close_object(c):
  c.close()
+
+
 
 
 
@@ -812,6 +822,8 @@ def database_execute(sql,*args):
  
 
 
+
+
 def database_executemany(sql,*args):
  a=[]
  if args:
@@ -822,6 +834,8 @@ def database_executemany(sql,*args):
  cur.executemany(sql,a)
  close_object(cur)
  close_object(c)
+
+
 
 
 
@@ -842,6 +856,8 @@ def database_fetch_one(sql,*args):
  
 
 
+
+
 def database_fetch_all(sql,*args):
  a=[]
  if args:
@@ -856,10 +872,9 @@ def database_fetch_all(sql,*args):
  if database_type=="mssql":
   return [pyodbc_to_dict(r) for x in r]
  return r
-
-
 """
  script4="""from database import *
+
 #make sure everything is alright before doing anything
 
 
@@ -910,7 +925,7 @@ def page_not_found(e):
     return "Page not found", 404
 
 
-def return_json(data):
+def return_json_response(data):
  response = app.response_class(
         response=json.dumps(data,default=str),
         status=200,
@@ -972,6 +987,7 @@ from routes import *
 if __name__ == '__main__':
    app.run(**app_conf)
 """)
+ write_file('passenger_wsgi.py',"from "+configs["app"].get('name','app')+" import app as application")
  os.makedirs("templates", exist_ok=True)
  os.makedirs("logs", exist_ok=True)
  if configs["app"].get('uploads',None)!=None:
