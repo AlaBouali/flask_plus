@@ -1,9 +1,10 @@
-import json,pymysql,random,time,sqlite3,sys,re,os,pip,psycopg2,pyodbc,datetime
+import json,pymysql,random,time,sqlite3,sys,re,os,pip,psycopg2,pyodbc,datetime,cx_Oracle
 
 flask_plus_version="Flask_Plus_Python"
 
-def install(p):
-    os.system(p+" install -r requirements.txt")
+def install():
+    configs=read_configs()
+    os.system(configs["app"].get("pip","pip3")+" install -r requirements.txt")
 
 def file_exists(path):
  return os.path.exists(path)
@@ -57,6 +58,10 @@ def pyodbc_to_dict(row):
 
 
 
+
+#in case of cx_Oracle connection error: https://stackoverflow.com/questions/56119490/cx-oracle-error-dpi-1047-cannot-locate-a-64-bit-oracle-client-library
+
+
 def get_database_connection():
  if type(database_credentials)==str:
    d=database_connector.connect(database_credentials)
@@ -66,7 +71,11 @@ def get_database_connection():
     d.autocommit=True
    return d
  if database_type!="sqlite":
-  return  database_connector.connect(**database_credentials)
+  if connector==pymysql:
+   return connector.connect(**database_credentials)
+  con=connector.connect(**database_credentials)
+  con.autocommit=True
+  return con
  conn= database_connector.connect(database_credentials['file'],isolation_level=database_credentials.get('isolation_level',None))
  conn.row_factory = lambda c, r: dict(zip([col[0] for col in c.description], r))
  return conn
@@ -129,6 +138,8 @@ def database_fetch_one(sql,*args):
  c=get_database_connection()
  cur=get_connection_cursor(c)
  cur.execute(sql,a)
+ if database_type=="oracle":
+  cur.rowfactory = lambda *args: dict(zip([d[0] for d in curs.description], args))
  r=cur.fetchone()
  close_object(cur)
  close_object(c)
@@ -148,6 +159,8 @@ def database_fetch_all(sql,*args):
  c=get_database_connection()
  cur=get_connection_cursor(c)
  cur.execute(sql,a)
+ if database_type=="oracle":
+  cur.rowfactory = lambda *args: dict(zip([d[0] for d in curs.description], args))
  r=cur.fetchall()
  close_object(cur)
  close_object(c)
@@ -211,7 +224,11 @@ def get_connection(c,connector):
    else:
     d.autocommit=True
    return d
- return connector.connect(**c)
+ if connector==pymysql:
+  return connector.connect(**c)
+ con=connector.connect(**c)
+ con.autocommit=True
+ return con
 
 def get_sqlite_connection(c):
  while True:
@@ -255,7 +272,6 @@ def create_app_script(configs):
  for x in r:
   f.write('{}\n'.format(x))
  f.close()
- install(configs["app"].get("pip","pip3"))
  r=list(dict.fromkeys(configs["app"].get('templates',[])))
  if r==[]:
   r=["/"]
@@ -331,6 +347,12 @@ import hashlib,functools
 
 from itsdangerous import URLSafeTimedSerializer
 from flask.sessions import TaggedJSONSerializer
+
+
+
+import firebase_admin
+from firebase_admin import credentials
+from google.cloud import storage
 """
 
  wrappers="""from handlings import *
@@ -392,6 +414,14 @@ def valid_authorization(f):
  return validate
 
 
+
+def safe_uri(f):
+ @functools.wraps(f)
+ def validate(*args, **kwargs):
+  for x in kwargs:
+   kwargs[x]=sanitizy.SQLI.escape(kwargs[x])
+  return f(*args, **kwargs)
+ return validate
 
 
 
@@ -505,6 +535,24 @@ def render_template(t,**kwargs):
 #Don't touch what's below unless you know what you are doing :)
 
 
+firebase_creds_file="firebase_creds.json"
+
+
+firebase_storage_bucket=None
+
+
+firebase_creds=None
+
+
+if firebase_storage_bucket!=None:
+ os.environ["GOOGLE_APPLICATION_CREDENTIALS"]=firebase_creds_file
+
+ firebase_creds = credentials.Certificate(firebase_creds_file)
+ default_app = firebase_admin.initialize_app(firebase_creds, {'storageBucket': firebase_storage_bucket})
+
+
+
+
 flask_default_salt = 'cookie-session'
 
 
@@ -530,7 +578,7 @@ accepted_origin_domains=[]
 allowed_file_extensions=['png','jpg','jpeg','gif','pdf']
 
 
-allowed_mimetypes_=["application/pdf","application/x-pdf","image/png","image/jpg","image/jpeg"]
+allowed_mimetypes_=["application/pdf","application/x-pdf","image/png","image/jpg","image/jpeg","image/jpeg"]
 
 
 
@@ -690,13 +738,13 @@ Flask_Mailler = flask_mail.Mail(app)
 class General_Model:
 
  def __init__(self,**kwargs):
-  for x in kwargs:
-   if type(kwargs[x])==str:
-    kwargs[x]=sanitizy.SQLI.unescape(kwargs[x])
   self.__dict__.update(kwargs)
 
 
 
+def delete_file(w):
+ if os.path.exists(w):
+  os.remove(w)
 
 
 
@@ -911,11 +959,38 @@ def valid_uploaded_file(f,allowed_extensions=['png','jpg','jpeg','gif','pdf'],al
 #automatically save any file to the uploads folder
 
 
+def bind_path(*args):
+ seperate='\\\\' if (sys.platform.lower() == "win32") or( sys.platform.lower() == "win64") else '/'
+ return seperate.join(args)
+
+
 
 def save_file(f,path=uploads_folder):
  os.makedirs(path, exist_ok=True)
  return sanitizy.FILE_UPLOAD.save_file(f,path=path)
 
+
+
+
+def delete_file_firebase(file_name):
+ storage_client = storage.Client()
+ bucket = storage_client.bucket(firebase_storage_bucket)
+ bucket.delete_blob(file_name)
+
+
+
+
+
+def upload_to_firebase(f):
+ p=bind_path(uploads_folder,'tmp')
+ path=save_file(f,path=p)
+ storage_client = storage.Client()
+ bucket = storage_client.bucket(firebase_storage_bucket)
+ direct,file_name=os.path.split(path)
+ blob = bucket.blob(file_name) 
+ blob.upload_from_filename(path)
+ delete_file(path)
+ return blob.public_url
 
 
 
@@ -980,11 +1055,7 @@ def download_this(path,root_dir=downloads_folder):
 
 @app.url_value_preprocessor
 def sql_escape_url(endpoint, values):
- path=get_real_uri(request)
- if path.startswith('/static/')==False and path.startswith('/'+downloads_folder+'/')==False:
-  if values!=None:
-   for x in values:
-    values[x]=sanitizy.SQLI.escape(values[x])
+ pass
 
 
 
@@ -1077,6 +1148,8 @@ def downloads(file):
  write_file("imports.py",script1)
  write_file("settings.py",script2)
  write_file("utils.py",script3)
+ if file_exists("templates/"+x)==False:
+  write_file("firebase_creds.json",'')
  write_file("handlings.py",script4)
  write_file("templates.py",s1)
  write_file("routes.py",s2)
@@ -1177,7 +1250,7 @@ def init_configs():
         "uploads":
             [],
         "requirements":
-            ["flask","sanitizy","flask-limiter","Flask-reCaptcha","Flask-Mail","werkzeug","gunicorn","itsdangerous","Jinja2"],
+            ["flask","sanitizy","flask-limiter","google-cloud-storage","firebase_admin","Flask-reCaptcha","Flask-Mail","werkzeug","gunicorn","itsdangerous","Jinja2"],
         "pip":
             "pip3"
         },
@@ -1212,6 +1285,19 @@ def init_configs():
                     },
                 "database_connector":
                         "pymysql"
+			},
+    "oracle":{
+                "connection":
+                    {
+                        "dsn":
+                                "localhost/test_api",
+                        "user":
+                                "root",
+                        "password":
+                                ""
+                    },
+                "database_connector":
+                        "cx_Oracle"
 			},
     "postgresql":{
                 "connection":
@@ -1282,24 +1368,27 @@ def init_app():
 
 
 def set_database(data,db):
- if data[db]["database_connector"].isalnum() ==True:
-  create_mysql_db(data[db]["connection"],eval(data[db]["database_connector"]))
- co=get_connection(data[db]["connection"],eval(data[db]["database_connector"]))
- cu=get_cursor(co)
- t=data["database"]["tables"]
  a=[]
- for x in t:
-  a.append({x: [ i for i in t[x]]})
-  cu.execute("CREATE TABLE IF NOT EXISTS "+x+" ( "+' , '.join([ i+" "+t[x][i] for i in t[x]])+" )")
- data["database"]["tables_names"]=a
- t=data["database"]["values"]
- for x in t:
-  p_h=' , '.join([ "%s" for y in [''.join([ i for i in t[x]]).split(',')][0]])
-  val_p=[ i for i in t[x]][0]
-  val=t[x][val_p]
-  cu.executemany("INSERT INTO "+x+" ( "+''.join([ i for i in t[x]])+" ) VALUES ( " +p_h+" )",val)
- cu.close()
- co.close()
+ try:
+  if data[db]["database_connector"].isalnum() ==True:
+   create_mysql_db(data[db]["connection"],eval(data[db]["database_connector"]))
+  co=get_connection(data[db]["connection"],eval(data[db]["database_connector"]))
+  cu=get_cursor(co)
+  t=data["database"]["tables"]
+  for x in t:
+   a.append({x: [ i for i in t[x]]})
+   cu.execute("CREATE TABLE IF NOT EXISTS "+x+" ( "+' , '.join([ i+" "+t[x][i] for i in t[x]])+" )")
+  data["database"]["tables_names"]=a
+  t=data["database"]["values"]
+  for x in t:
+   p_h=' , '.join([ "%s" for y in [''.join([ i for i in t[x]]).split(',')][0]])
+   val_p=[ i for i in t[x]][0]
+   val=t[x][val_p]
+   cu.executemany("INSERT INTO "+x+" ( "+''.join([ i for i in t[x]])+" ) VALUES ( " +p_h+" )",val)
+  cu.close()
+  co.close()
+ except Exception as ex:
+  print(ex)
  data["database"]["tables_names"]=a
  data["database"]["database_type"]=db
  write_configs(data)
@@ -1326,8 +1415,8 @@ def set_sqlite_database(data):
  data["database"]["database_type"]="sqlite"
  write_configs(data)
 
-supported_dbs=["sqlite","mysql","postgresql","mssql"]
-supported_inits=["app","config"]
+supported_dbs=["sqlite","mysql","postgresql","mssql","oracle"]
+supported_inits=["app","config","install"]
 
 def help_msg(e):
   dbs=" or ".join(supported_dbs)
@@ -1354,6 +1443,13 @@ def main():
  if sys.argv[1]=="init" and sys.argv[2]=="app":
   try:
    init_app()
+  except Exception as e:
+   print(e)
+   help_msg('Missing configs ! Try runing: '+sys.argv[0]+' init config')
+  sys.exit()
+ if sys.argv[1]=="init" and sys.argv[2]=="install":
+  try:
+   install()
   except Exception as e:
    print(e)
    help_msg('Missing configs ! Try runing: '+sys.argv[0]+' init config')
