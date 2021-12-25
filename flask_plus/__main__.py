@@ -108,12 +108,12 @@ def read_configs():
  return d
 
 def create_app_script(configs):
- login_redirect="/"
+ home_page_redirect="/"
  if configs["app"].get('templates',[])!=[]:
-  login_redirect=configs["app"]['templates'][0]
+  home_page_redirect=configs["app"]['templates'][0]
  home_page='""'
- if login_redirect!="/":
-  home_page="render_template('"+login_redirect+"')"
+ if home_page_redirect!="/":
+  home_page="render_template('"+home_page_redirect+"')"
  db_con=configs[configs["database"].get("database_type",'sqlite')].get("connection",{})
  if type(db_con)==str:
   db_con=str(json.dumps(db_con))
@@ -218,7 +218,7 @@ def private(f):
   if validate_logged_in(session)==True:
    return f(*args, **kwargs)
   else:
-   return redirect(login_endpoint)
+   return redirect(home_page_endpoint)
  return validate
 
 
@@ -231,7 +231,7 @@ def admin(f):
   if validate_is_admin(session)==True:
    return f(*args, **kwargs)
   else:
-   return redirect(login_endpoint)
+   return redirect(home_page_endpoint)
  return validate
 
 
@@ -243,7 +243,7 @@ def do_logout(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
    is_logged_out(session)
-   return redirect(login_endpoint)
+   return redirect(home_page_endpoint)
  return validate
 
 
@@ -531,7 +531,7 @@ admin_indicator="admin"
 
 #the endpoint which the user will be redirected if he accessed a page which requires authentication
 
-login_endpoint='"""+login_redirect+"""'
+home_page_endpoint='"""+home_page_redirect+"""'
 
 
 
