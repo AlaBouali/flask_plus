@@ -5,7 +5,7 @@ flask_plus_version="Flask_Plus_Python"
 def install(p):
     os.system(p+" install -r requirements.txt")
 
-def is_file_exists(path):
+def file_exists(path):
  return os.path.exists(path)
  
 
@@ -223,6 +223,34 @@ def private(f):
 
 
 
+
+
+def admin(f):
+ @functools.wraps(f)
+ def validate(*args, **kwargs):
+  if validate_is_admin(session)==True:
+   return f(*args, **kwargs)
+  else:
+   return redirect(login_endpoint)
+ return validate
+
+
+
+
+
+
+def do_logout(f):
+ @functools.wraps(f)
+ def validate(*args, **kwargs):
+   is_logged_out(session)
+   return redirect(login_endpoint)
+ return validate
+
+
+
+
+
+
 def valid_authorization(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
@@ -230,11 +258,13 @@ def valid_authorization(f):
   if len(token)==0:
    return "Invalid Token",401
   try:
-   session=decode_flask_token(token)
+   d=decode_flask_token(token)
+   set_session_variables(session,d)
   except:
    return "Invalid Token",401
   return f(*args, **kwargs)
  return validate
+
 
 
 
@@ -255,6 +285,7 @@ def safe_form(f):
   request.form=sanitizy.SQLI.escape_form(request)
   return f(*args, **kwargs)
  return validate
+
 
 
 
@@ -282,6 +313,7 @@ def safe_files(f):
 
 
 
+
 def valid_recaptcha(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
@@ -293,13 +325,14 @@ def valid_recaptcha(f):
 
 
 
+
 def valid_referer(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
   if csrf_referer_checker(request,allowed_domains=accepted_referer_domains)==True:
    return f(*args, **kwargs)
   else:
-   return " Invalid request source",401
+   return "Invalid request source",401
  return validate
 
 
@@ -313,7 +346,7 @@ def valid_origin(f):
   if validate_origin_header(request,allowed_domains=accepted_origin_domains)==True:
    return f(*args, **kwargs)
   else:
-   return " Invalid request source",401
+   return "Invalid request source",401
  return validate
 
 
@@ -326,8 +359,9 @@ def valid_csrf_token(f):
   if csrf_token_checker(request,session)==True:
    return f(*args, **kwargs)
   else:
-   return " Invalid request source",401
+   return "Invalid CSRF Token",401
  return validate
+
 
 
 
@@ -338,9 +372,10 @@ def render_template(t,**kwargs):
  except Exception as e:
   print(e)
   return 'Template not found'
-
 """
  script2="""from imports import *
+
+
 #Don't touch what's below unless you know what you are doing :)
 
 
@@ -484,10 +519,6 @@ uploads_folder="uploads"
 csrf_token_name="csrf_token"
 
 
-#Domains/Subdomains that are allowed to send POST requests
-
-accepted_domains=[]
-
 
 
 
@@ -496,7 +527,7 @@ accepted_domains=[]
 
 session_login_indicator="logged_in"
 
-
+admin_indicator="admin"
 
 #the endpoint which the user will be redirected if he accessed a page which requires authentication
 
@@ -536,7 +567,10 @@ Flask_Mailler = flask_mail.Mail(app)
 """
  script3="""from settings import *
 
+
+
 #general Model class to have any arributes for any model
+
 
 class General_Model:
 
@@ -545,6 +579,8 @@ class General_Model:
    if type(kwargs[x])==str:
     kwargs[x]=sanitizy.SQLI.unescape(kwargs[x])
   self.__dict__.update(kwargs)
+
+
 
 
 
@@ -571,8 +607,12 @@ def read_file(fl):
 
 
 
+
+
 def get_real_uri(r):
  return "/"+"/".join([ x for x in r.path.split('/') if x.strip()!=""])
+
+
 
 
 def validate_origin_header(obj,allowed_domains=[]):
@@ -587,17 +627,24 @@ def validate_origin_header(obj,allowed_domains=[]):
 
 
 
+
 #function to generate random string
 
 def random_string(s):
  return ''.join([random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890') for x in range(s)])
 
 
-def is_file_exists(path):
+
+
+def file_exists(path):
  return os.path.exists(path)
+
+
+
 
 def unescape_sqli(s):
  return sanitizy.SQLI.unescape(s)
+
 
 
 
@@ -606,14 +653,18 @@ def set_headers(h,d):
   h[x] = d[x]
 
 
+
+
 def unset_headers(h,d):
  for x in d:
   h[x]=''
 
 
 
+
 def set_cookie(r,k,v,attributes):
  r.set_cookie(k, v , **attributes)
+
 
 
 
@@ -625,6 +676,7 @@ def set_session_variables(s,d):
 
 
 
+
 def reset_session(s):
  s.clear()
  s.modified = True
@@ -632,10 +684,14 @@ def reset_session(s):
  
 
 
+
+
 #security checks
+
 
 def csrf_token_checker(r,s):
  return r.form.get(csrf_token_name,"")==s.get(csrf_token_name,"")
+
 
 
 '''
@@ -645,21 +701,25 @@ example:
 
 @app.route('/login',methods=["POST"])
 def login():
- if request.form.get('pass')=='admin':
-   is_logged_in(session)
+ if request.form.get('pass')=='joe':
+   is_logged_in(session,admin=False,variables={"username":"joe"})
    return redirect('profile.html')
  return redirect('login.html')
 
 '''
 
 
-def is_logged_in(s,variables={}):
+
+
+def is_logged_in(s,admin=False,variables={}):
  csrf=random_string(64)
  s[csrf_token_name]=csrf
  s[session_login_indicator]=True
+ variables.update({admin_indicator:admin})
  set_session_variables(s,variables)
  s.modified = True
  s.permanent = permanent_session
+
 
 
 
@@ -671,13 +731,14 @@ example:
 
 @app.route('/logout',methods=["POST"])
 def logout():
- is_not_logged_in(session)
+ is_logged_out(session)
  return redirect('login.html')
 
 '''
 
 
-def is_not_logged_in(s):
+
+def is_logged_out(s):
  s[csrf_token_name]=""
  s[session_login_indicator]=False
  reset_session(s)
@@ -687,8 +748,14 @@ def is_not_logged_in(s):
 
 
 
+
 def validate_logged_in(s):
  return s.get(session_login_indicator,False)
+
+
+
+def validate_is_admin(s):
+ return s.get(session_login_indicator,False) and s.get(admin_indicator,False)
 
 
 
@@ -699,8 +766,11 @@ def secure_filename(f):
 
 
 
+
 def csrf_referer_checker(req,allowed_domains=[]):
  return sanitizy.CSRF.validate_flask(req,allowed_domains=allowed_domains)
+
+
 
 
 
@@ -722,12 +792,15 @@ def valid_uploaded_file(f,allowed_extensions=['png','jpg','jpeg','gif','pdf'],al
 
 
 
+
 #automatically save any file to the uploads folder
+
 
 
 def save_file(f,path=uploads_folder):
  os.makedirs(path, exist_ok=True)
  return sanitizy.FILE_UPLOAD.save_file(f,path=path)
+
 
 
 
@@ -738,8 +811,10 @@ def no_lfi(path):
 
 
 
+
 def no_ssrf(p):
  return sanitizy.SSRF.validate(p)
+
 
 
 
@@ -757,6 +832,7 @@ def list_contains(l,s):
 
 
 
+
 def send_mail(subject='',sender=app.config['MAIL_USERNAME'],recipients=[],body='',html='',attachements=[]):
    if recipients==None or len(recipients)==0:
     raise Exception("You need to set a least 1 recipient !!")
@@ -769,6 +845,7 @@ def send_mail(subject='',sender=app.config['MAIL_USERNAME'],recipients=[],body='
     msg.attach(os.path.split(x)[1],mimetypes.guess_type(x)[0],read_file(x))  
    Flask_Mailler.send(msg)
    
+
 
 
 
@@ -1010,11 +1087,11 @@ if __name__ == '__main__':
  os.makedirs("static", exist_ok=True)
  if configs["app"].get('templates',[])!=[]:
   for x in configs["app"].get('templates',[]):
-   if is_file_exists("templates/"+x)==False:
+   if file_exists("templates/"+x)==False:
     create_file("templates/"+x)
  if configs["app"].get('static',None)!=None:
   for x in configs["app"]["static"]:
-   if is_file_exists("static/"+x)==False:
+   if file_exists("static/"+x)==False:
     create_file("static/"+x)
  write_file('Procfile','web: gunicorn '+configs["app"].get('name','app')+':app')
 
