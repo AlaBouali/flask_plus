@@ -214,7 +214,7 @@ def private(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
   if validate_logged_in(session)==True:
-   return f()
+   return f(*args, **kwargs)
   else:
    return redirect(login_endpoint)
  return validate
@@ -223,15 +223,15 @@ def private(f):
 def valid_authorization(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
-  token=request.headers.get("Authorization",'')
+  token=request.headers.get(authorization_header,'')
   if len(token)==0:
    return "Invalid Token",401
   try:
-   cookie=decode_flask_token(token)
+   session=decode_flask_token(token)
   except:
    return "Invalid Token",401
   if validate_logged_in(cookie)==True:
-   return f()
+   return f(*args, **kwargs)
   else:
    return "Invalid Token",401
  return validate
@@ -242,14 +242,15 @@ def safe_args(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
   request.args=sanitizy.SQLI.escape_args(request)
-  return f()
-  
+  return f(*args, **kwargs)
+ return validate
 
 def safe_form(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
   request.form=sanitizy.SQLI.escape_form(request)
-  return f()
+  return f(*args, **kwargs)
+ return validate
 
 
 def safe_request(f):
@@ -257,14 +258,15 @@ def safe_request(f):
  def validate(*args, **kwargs):
   request.form=sanitizy.SQLI.escape_form(request)
   request.args=sanitizy.SQLI.escape_args(request)
-  return f()
+  return f(*args, **kwargs)
+ return validate
 
 
 def safe_files(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
   if sanitizy.FILE_UPLOAD.validate_form(request)==True:
-   return f()
+   return f(*args, **kwargs)
   else:
    return "Unacceptable Files",401
  return validate
@@ -274,7 +276,7 @@ def valid_recaptcha(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
   if recaptcha.verify():
-   return f()
+   return f(*args, **kwargs)
   else:
    return "Invalid recaptcha",401
  return validate
@@ -284,8 +286,8 @@ def valid_recaptcha(f):
 def valid_referer(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
-  if csrf_referer_checker(request,allowed_domains=accepted_domains)==True:
-   return f()
+  if csrf_referer_checker(request,allowed_domains=accepted_referer_domains)==True:
+   return f(*args, **kwargs)
   else:
    return " Invalid request source",401
  return validate
@@ -296,8 +298,8 @@ def valid_origin(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
   validate_origin_header
-  if validate_origin_header(request,allowed_domains=accepted_domains)==True:
-   return f()
+  if validate_origin_header(request,allowed_domains=accepted_origin_domains)==True:
+   return f(*args, **kwargs)
   else:
    return " Invalid request source",401
  return validate
@@ -309,10 +311,11 @@ def valid_csrf_token(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
   if csrf_token_checker(request,session)==True:
-   return f()
+   return f(*args, **kwargs)
   else:
    return " Invalid request source",401
  return validate
+
 
 def render_template(t,**kwargs):
  try:
@@ -332,13 +335,18 @@ flask_default_salt = 'cookie-session'
 app = Flask(__name__)
 
 
+authorization_header='Auth-Token'
+
+
 endpoints_limiter=flask_limiter.Limiter(app, key_func=get_remote_address, default_limits=[])
 
 
 server_signature='"""+flask_plus_version+"""'
 
 
+accepted_referer_domains=[]
 
+accepted_origin_domains=[]
 
 #global important variables
 
@@ -758,7 +766,10 @@ def download_this(path,root_dir=downloads_folder):
  return "Not Found",404
 """
  db_s="""from utils import *
- 
+
+
+def pyodbc_to_dict(row):
+    return dict(zip([t[0] for t in row.cursor_description], row))
 
 def get_database_connection():
  if type(database_credentials)==str:
@@ -770,11 +781,16 @@ def get_database_connection():
    return d
  if database_type!="sqlite":
   return  database_connector.connect(**database_credentials)
- return database_connector.connect(database_credentials['file'],isolation_level=database_credentials['isolation_level'])
-
+ conn= database_connector.connect(database_credentials['file'],isolation_level=database_credentials['isolation_level'])
+ conn.row_factory = lambda c, r: dict(zip([col[0] for col in c.description], r))
+ return conn
 
 
 def get_connection_cursor(c):
+ if database_type=="mysql":
+  return c.cursor(pymysql.cursors.DictCursor)
+ if database_type=="postgres":
+  return c.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
  return c.cursor()
  
 
@@ -820,6 +836,8 @@ def database_fetch_one(sql,*args):
  r=cur.fetchone()
  close_object(cur)
  close_object(c)
+ if database_type=="mssql":
+  return pyodbc_to_dict(r)
  return r
  
 
@@ -835,6 +853,8 @@ def database_fetch_all(sql,*args):
  r=cur.fetchall()
  close_object(cur)
  close_object(c)
+ if database_type=="mssql":
+  return [pyodbc_to_dict(r) for x in r]
  return r
 
 
@@ -945,7 +965,7 @@ def downloads(file):
  write_file("handlings.py",script4)
  write_file("templates.py",s1)
  write_file("routes.py",s2)
- write_file(configs["app"].get('name','')+".py","""from templates import *
+ write_file(configs["app"].get('name','app')+".py","""from templates import *
 from routes import * 
 
 
@@ -956,12 +976,6 @@ if __name__ == '__main__':
  os.makedirs("logs", exist_ok=True)
  if configs["app"].get('uploads',None)!=None:
   os.makedirs("uploads", exist_ok=True)
- """if configs["app"].get('downloads',None)!=None:
-  os.makedirs("downloads", exist_ok=True)
-  for x in configs["app"]["downloads"]:
-   f = open("downloads/"+x[0], "w")
-   f.write(x[1])
-   f.close()"""
  os.makedirs("static", exist_ok=True)
  if configs["app"].get('templates',[])!=[]:
   for x in configs["app"].get('templates',[]):
@@ -971,7 +985,7 @@ if __name__ == '__main__':
   for x in configs["app"]["static"]:
    if is_file_exists("static/"+x)==False:
     create_file("static/"+x)
- write_file('Procfile','web: gunicorn app:app')
+ write_file('Procfile','web: gunicorn '+configs["app"].get('name','app')+':app')
 
 
 
