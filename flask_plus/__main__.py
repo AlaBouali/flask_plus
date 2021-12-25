@@ -25,6 +25,139 @@ def write_file(f,s):
  f.write(s)
  f.close()
 
+
+
+def get_db_code(configs):
+ db_con=configs[configs["database"].get("database_type",'sqlite')].get("connection",{})
+ if type(db_con)==str:
+  db_con=str(json.dumps(db_con))
+ else:
+  db_con=str(db_con)
+ return """from utils import *
+
+
+
+import """+configs[configs["database"].get("database_type",'sqlite')].get("database_connector",'sqlite3')+""" as database_connector
+
+
+database_credentials="""+db_con+"""
+
+
+database_structure="""+str(configs["database"]["tables_names"])+"""
+
+
+database_type='"""+configs["database"].get("database_type",'sqlite')+"""'
+
+
+
+
+def pyodbc_to_dict(row):
+    return dict(zip([t[0] for t in row.cursor_description], row))
+
+
+
+
+def get_database_connection():
+ if type(database_credentials)==str:
+   d=database_connector.connect(database_credentials)
+   if database_connector==psycopg2:
+    d.set_session(autocommit=True)
+   else:
+    d.autocommit=True
+   return d
+ if database_type!="sqlite":
+  return  database_connector.connect(**database_credentials)
+ conn= database_connector.connect(database_credentials['file'],isolation_level=database_credentials.get('isolation_level',None))
+ conn.row_factory = lambda c, r: dict(zip([col[0] for col in c.description], r))
+ return conn
+
+
+
+
+def get_connection_cursor(c):
+ if database_type=="mysql":
+  return c.cursor(database_connector.cursors.DictCursor)
+ if database_type=="postgres":
+  return c.cursor(cursor_factory=database_connector.extras.RealDictCursor)
+ return c.cursor()
+ 
+
+
+
+def close_object(c):
+ c.close()
+
+
+
+
+
+def database_execute(sql,*args):
+ a=[]
+ if args:
+  if args[0]!=None:
+   a=args[0]
+ c=get_database_connection()
+ cur=get_connection_cursor(c)
+ cur.execute(sql,a)
+ close_object(cur)
+ close_object(c)
+ 
+
+
+
+
+def database_executemany(sql,*args):
+ a=[]
+ if args:
+  if args[0]!=None:
+   a=args[0]
+ c=get_database_connection()
+ cur=get_connection_cursor(c)
+ cur.executemany(sql,a)
+ close_object(cur)
+ close_object(c)
+
+
+
+
+
+def database_fetch_one(sql,*args):
+ a=[]
+ if args:
+  if args[0]!=None:
+   a=args[0]
+ c=get_database_connection()
+ cur=get_connection_cursor(c)
+ cur.execute(sql,a)
+ r=cur.fetchone()
+ close_object(cur)
+ close_object(c)
+ if database_type=="mssql":
+  return pyodbc_to_dict(r)
+ return r
+ 
+
+
+
+
+def database_fetch_all(sql,*args):
+ a=[]
+ if args:
+  if args[0]!=None:
+   a=args[0]
+ c=get_database_connection()
+ cur=get_connection_cursor(c)
+ cur.execute(sql,a)
+ r=cur.fetchall()
+ close_object(cur)
+ close_object(c)
+ if database_type=="mssql":
+  return [pyodbc_to_dict(r) for x in r]
+ return r
+"""
+
+
+
 def random_string(s):
  return ''.join([random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890') for x in range(s)])
 
@@ -114,11 +247,6 @@ def create_app_script(configs):
  home_page='""'
  if home_page_redirect!="/":
   home_page="render_template('"+home_page_redirect+"')"
- db_con=configs[configs["database"].get("database_type",'sqlite')].get("connection",{})
- if type(db_con)==str:
-  db_con=str(json.dumps(db_con))
- else:
-  db_con=str(db_con)
  r=configs["app"].get("requirements",[])
  con=configs[configs["database"].get("database_type",'sqlite')].get("database_connector",'sqlite3')
  if con!="sqlite3":
@@ -197,8 +325,6 @@ sqlite3=None
 pyodbc=None
 pymysql=None
 psycopg2=None
-
-import """+configs[configs["database"].get("database_type",'sqlite')].get("database_connector",'sqlite3')+"""
 
 
 import hashlib,functools 
@@ -535,17 +661,6 @@ home_page_endpoint='"""+home_page_redirect+"""'
 
 
 
-database_type='"""+configs["database"].get("database_type",'sqlite')+"""'
-
-
-database_connector="""+configs[configs["database"].get("database_type",'sqlite')].get("database_connector",'sqlite3')+"""
-
-
-database_credentials="""+db_con+"""
-
-
-database_structure="""+str(configs["database"]["tables_names"])+"""
-
 
 recaptcha =flask_recaptcha.ReCaptcha(app)
 
@@ -857,114 +972,7 @@ def download_this(path,root_dir=downloads_folder):
    return send_file(path, as_attachment=True)
  return "Not Found",404
 """
- db_s="""from utils import *
-
-
-
-def pyodbc_to_dict(row):
-    return dict(zip([t[0] for t in row.cursor_description], row))
-
-
-
-
-def get_database_connection():
- if type(database_credentials)==str:
-   d=database_connector.connect(database_credentials)
-   if database_connector==psycopg2:
-    d.set_session(autocommit=True)
-   else:
-    d.autocommit=True
-   return d
- if database_type!="sqlite":
-  return  database_connector.connect(**database_credentials)
- conn= database_connector.connect(database_credentials['file'],isolation_level=database_credentials['isolation_level'])
- conn.row_factory = lambda c, r: dict(zip([col[0] for col in c.description], r))
- return conn
-
-
-
-
-def get_connection_cursor(c):
- if database_type=="mysql":
-  return c.cursor(pymysql.cursors.DictCursor)
- if database_type=="postgres":
-  return c.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
- return c.cursor()
- 
-
-
-
-def close_object(c):
- c.close()
-
-
-
-
-
-def database_execute(sql,*args):
- a=[]
- if args:
-  if args[0]!=None:
-   a=args[0]
- c=get_database_connection()
- cur=get_connection_cursor(c)
- cur.execute(sql,a)
- close_object(cur)
- close_object(c)
- 
-
-
-
-
-def database_executemany(sql,*args):
- a=[]
- if args:
-  if args[0]!=None:
-   a=args[0]
- c=get_database_connection()
- cur=get_connection_cursor(c)
- cur.executemany(sql,a)
- close_object(cur)
- close_object(c)
-
-
-
-
-
-def database_fetch_one(sql,*args):
- a=[]
- if args:
-  if args[0]!=None:
-   a=args[0]
- c=get_database_connection()
- cur=get_connection_cursor(c)
- cur.execute(sql,a)
- r=cur.fetchone()
- close_object(cur)
- close_object(c)
- if database_type=="mssql":
-  return pyodbc_to_dict(r)
- return r
- 
-
-
-
-
-def database_fetch_all(sql,*args):
- a=[]
- if args:
-  if args[0]!=None:
-   a=args[0]
- c=get_database_connection()
- cur=get_connection_cursor(c)
- cur.execute(sql,a)
- r=cur.fetchall()
- close_object(cur)
- close_object(c)
- if database_type=="mssql":
-  return [pyodbc_to_dict(r) for x in r]
- return r
-"""
+ db_s=get_db_code(configs)
  script4="""from database import *
 
 #make sure everything is alright before doing anything
@@ -1361,6 +1369,8 @@ def main():
    set_sqlite_database(conf)
   else:
    set_database(conf,sys.argv[2])
+  if file_exists('database.py')==True:
+   write_file('database.py',get_db_code(conf))
  else:
   help_msg('Unknown Database type')
  sys.exit() 
