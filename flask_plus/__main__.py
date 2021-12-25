@@ -210,6 +210,8 @@ from flask.sessions import TaggedJSONSerializer
  wrappers="""from handlings import *
 
 
+
+
 def private(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
@@ -218,6 +220,7 @@ def private(f):
   else:
    return redirect(login_endpoint)
  return validate
+
 
 
 def valid_authorization(f):
@@ -230,11 +233,9 @@ def valid_authorization(f):
    session=decode_flask_token(token)
   except:
    return "Invalid Token",401
-  if validate_logged_in(cookie)==True:
-   return f(*args, **kwargs)
-  else:
-   return "Invalid Token",401
+  return f(*args, **kwargs)
  return validate
+
 
 
 
@@ -245,12 +246,17 @@ def safe_args(f):
   return f(*args, **kwargs)
  return validate
 
+
+
+
 def safe_form(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
   request.form=sanitizy.SQLI.escape_form(request)
   return f(*args, **kwargs)
  return validate
+
+
 
 
 def safe_request(f):
@@ -262,6 +268,8 @@ def safe_request(f):
  return validate
 
 
+
+
 def safe_files(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
@@ -270,6 +278,8 @@ def safe_files(f):
   else:
    return "Unacceptable Files",401
  return validate
+
+
 
 
 def valid_recaptcha(f):
@@ -294,6 +304,8 @@ def valid_referer(f):
 
 
 
+
+
 def valid_origin(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
@@ -307,6 +319,7 @@ def valid_origin(f):
 
 
 
+
 def valid_csrf_token(f):
  @functools.wraps(f)
  def validate(*args, **kwargs):
@@ -315,6 +328,8 @@ def valid_csrf_token(f):
   else:
    return " Invalid request source",401
  return validate
+
+
 
 
 def render_template(t,**kwargs):
