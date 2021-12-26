@@ -1601,17 +1601,17 @@ Usage:
 args:
         
 
-        init: to create "config.json" and python files that contains 
-              code and setup configurations, and to install required packages 
-        
-
-        db: to choose database type to use ( """+dbs+""" )
+        examples: to show commands examples
         
 
         upgrade: to upgrade to the latest version of flask_plus package
         
 
-        examples: to show commands examples
+        init: to create "config.json" and python files that contains 
+              code and setup configurations, and to install required packages 
+        
+
+        db: to choose database type to use ( """+dbs+""" )
         
 
         add_template: create a template file with that path in the 
@@ -1799,5 +1799,3 @@ def main():
  else:
   help_msg('Unknown Database type')
  sys.exit() 
-
-	
