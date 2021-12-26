@@ -42,7 +42,8 @@ args:
 
 </pre></div>
 # Commands examples:
-<div style="background: #f8f8f8; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%">** Creating a Project:
+<div style="background: #f8f8f8; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%">
+** Creating a Project:
 
 
 Example 1 (database: SQLite) :
