@@ -12,7 +12,13 @@ def install():
  for x in r:
   f.write('{}\n'.format(x))
  f.close()
- os.system(configs["app"].get("pip","pip3")+" install -r requirements.txt")
+ os.system(configs["app"].get("pip","pip3")+" install -r requirements.txt -U")
+ 
+ 
+def upgrade():
+ configs=read_configs()
+ os.system(configs["app"].get("pip","pip3")+" install flask_plus -U")
+
 
 def file_exists(path):
  return os.path.exists(path)
@@ -334,7 +340,7 @@ def {}({}):
 def {}({}):
  return ""
 
-""".format(x.replace('.','_'),su,x[1:].replace('{','').replace('}','').replace('/','_').replace('<','').replace('>','').replace(':','_').replace('.',''),params)
+""".format(x.replace('.','_'),su,x[1:].replace('{','').replace('}','_').replace('/','_').replace('<','').replace('>','_').replace(':','_').replace('.',''),params)
  script1="""import flask
 from flask import Flask, request,send_file,Response,redirect,session
 from werkzeug.utils import secure_filename
@@ -1433,6 +1439,7 @@ def set_sqlite_database(data):
 
 supported_dbs=["sqlite","mysql","postgresql","mssql","oracle"]
 supported_inits=["app","config","install"]
+supported_args=["init","db","update"]
 
 def help_msg(e):
   dbs=" or ".join(supported_dbs)
@@ -1447,8 +1454,11 @@ def main():
  if len(sys.argv)<3:
   help_msg("Missing arguments")
   sys.exit()
- if sys.argv[1] not in ["init","db"]:
+ if sys.argv[1] not in supported_args:
   help_msg('Unknown arguments')
+  sys.exit()
+ if sys.argv[1]=="upgrade":
+  upgrade()
   sys.exit()
  if sys.argv[2] not in supported_dbs and sys.argv[2] not in supported_inits:
   help_msg('Unknown arguments')
