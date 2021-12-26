@@ -3,8 +3,16 @@ import json,pymysql,random,time,sqlite3,sys,re,os,pip,psycopg2,pyodbc,datetime,c
 flask_plus_version="Flask_Plus_Python"
 
 def install():
-    configs=read_configs()
-    os.system(configs["app"].get("pip","pip3")+" install -r requirements.txt")
+ configs=read_configs()
+ r=configs["app"].get("requirements",[])
+ con=configs[configs["database"].get("database_type",'sqlite')].get("database_connector",'sqlite3')
+ if con!="sqlite3":
+  r.append(con)
+ f = open("requirements.txt", "w")
+ for x in r:
+  f.write('{}\n'.format(x))
+ f.close()
+ os.system(configs["app"].get("pip","pip3")+" install -r requirements.txt")
 
 def file_exists(path):
  return os.path.exists(path)
@@ -275,7 +283,7 @@ def create_app_script(configs):
  r=list(dict.fromkeys(configs["app"].get('templates',[])))
  if r==[]:
   r=["/"]
- s1="""from wrappers import *
+ s1="""from routes import *
 """
  for x in r:
   if x[:1]!="/":
@@ -283,6 +291,8 @@ def create_app_script(configs):
   s1+="""
 
 @app.route('{}',methods=["GET","POST"])
+@safe_request
+@safe_files
 @endpoints_limiter.limit("3600/hour")
 def {}():
  data={{"session":General_Model(**session),"title":"{}"}}
@@ -297,6 +307,9 @@ def {}():
  for x in r:
   a=re.findall(r'<[^>]*>',x)
   params=",".join([ i.replace('{','').replace('}','').replace('<','').replace('>','').split(':')[0] for i in a])
+  su=""
+  if len(params.strip())>0:
+   su="\n@safe_uri"
   x="/"+"/".join([ i for i in x.split('/') if i.strip()!=""])
   if x[:1]!="/":
    x="/"+x
@@ -304,6 +317,8 @@ def {}():
    s2+="""
 
 @app.route('{}',methods=["GET","POST"])
+@safe_request
+@safe_files
 @endpoints_limiter.limit("3600/hour")
 def {}({}):
  return {}
@@ -313,11 +328,13 @@ def {}({}):
    s2+="""
 
 @app.route('{}',methods=["GET","POST"])
+@safe_request
+@safe_files{}
 @endpoints_limiter.limit("3600/hour")
 def {}({}):
  return ""
 
-""".format(x.replace('.','_'),x[1:].replace('{','').replace('}','').replace('/','_').replace('<','').replace('>','').replace(':','_').replace('.',''),params)
+""".format(x.replace('.','_'),su,x[1:].replace('{','').replace('}','').replace('/','_').replace('<','').replace('>','').replace(':','_').replace('.',''),params)
  script1="""import flask
 from flask import Flask, request,send_file,Response,redirect,session
 from werkzeug.utils import secure_filename
@@ -1154,7 +1171,6 @@ def downloads(file):
  write_file("templates.py",s1)
  write_file("routes.py",s2)
  write_file(configs["app"].get('name','app')+".py","""from templates import *
-from routes import * 
 
 
 if __name__ == '__main__':
@@ -1250,9 +1266,9 @@ def init_configs():
         "uploads":
             [],
         "requirements":
-            ["flask","sanitizy","flask-limiter","google-cloud-storage","firebase_admin","Flask-reCaptcha","Flask-Mail","werkzeug","gunicorn","itsdangerous","Jinja2"],
+            ["flask","sanitizy","flask-limiter","google-cloud-storage","firebase_admin","Flask-reCaptcha","Flask-Mail","werkzeug","gunicorn","itsdangerous","Jinja2","psycopg2","pyodbc","cx_Oracle"],
         "pip":
-            "pip3"
+            "pip" if sys.version_info < (3,0) else "pip3"
         },
     "sqlite":
             {
