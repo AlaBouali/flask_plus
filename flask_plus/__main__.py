@@ -2,6 +2,22 @@ import json,pymysql,random,time,sqlite3,sys,re,os,pip,psycopg2,pyodbc,datetime,c
 
 flask_plus_version="Flask_Plus_Python"
 
+
+def read_file(fl):
+ with open(fl,'r') as f:
+    content = f.read()
+    f.close()
+ return content
+
+def delete_file(w):
+ if os.path.exists(w):
+  os.remove(w)
+
+def add_to_file(fi,s):
+ f = open(fi,'a+')
+ f.write(s)
+ f.close()
+
 def install():
  configs=read_configs()
  r=configs["app"].get("requirements",[])
@@ -13,11 +29,60 @@ def install():
   f.write('{}\n'.format(x))
  f.close()
  os.system(configs["app"].get("pip","pip3")+" install -r requirements.txt -U")
- 
- 
-def upgrade():
+
+
+def add_template(x):
+ if x[:1]!="/":
+   x="/"+x
  configs=read_configs()
- os.system(configs["app"].get("pip","pip3")+" install flask_plus -U")
+ r=configs["app"].get("templates",[])
+ if x in r:
+  return 
+ s="""
+
+@app.route('{}',methods=["GET","POST"])
+@safe_request
+@safe_files
+@endpoints_limiter.limit("3600/hour")
+def {}():
+ data={{"session":General_Model(**session),"title":"{}"}}
+ return render_template("{}",**data)
+
+""".format(x,x[1:].replace('.','_').replace("/","_"),x.split("/")[-1].split('.')[0].replace("_"," ").replace("/"," ").strip(),x[1:])
+ r.append(x)
+ configs["app"]["templates"]=r
+ write_configs(configs)
+ add_to_file("templates.py",s)
+ create_file("templates"+x)
+
+
+def delete_template(x):
+ if x[:1]!="/":
+   x="/"+x
+ configs=read_configs()
+ r=configs["app"].get("templates",[])
+ if x not in r:
+  return 
+ r.remove(x)
+ configs["app"]["templates"]=r
+ write_configs(configs)
+ delete_file("templates/"+x)
+ d=read_file("templates.py")
+ l=d.split("@app.route(")
+ s=''
+ for i in l:
+  if x not in i:
+   if "from routes import *" not in i:
+    s+="\n\n\n@app.route("+i.strip()
+   else:
+    s+=i.strip()
+ write_file("templates.py",s+"\n\n")
+
+
+
+def upgrade():
+ p="pip" if sys.version_info < (3,0) else "pip3"
+ os.system(p+" install flask_plus -U")
 
 
 def file_exists(path):
@@ -304,7 +369,7 @@ def {}():
  data={{"session":General_Model(**session),"title":"{}"}}
  return render_template("{}",**data)
 
-""".format(x,x[1:].replace('.','_').replace("/","_"),x.split("/")[-1].split('.')[0].replace("_"," ").replace("/"," ").strip(),x)
+""".format(x,x[1:].replace('.','_').replace("/","_"),x.split("/")[-1].split('.')[0].replace("_"," ").replace("/"," ").strip(),x[1:])
  r=list(dict.fromkeys(configs["app"].get("routes",[])))
  if r==[]:
   r=["/"]
@@ -1439,19 +1504,62 @@ def set_sqlite_database(data):
 
 supported_dbs=["sqlite","mysql","postgresql","mssql","oracle"]
 supported_inits=["app","config","install"]
-supported_args=["init","db","update"]
+supported_args=["init","db","upgrade","examples","add_template","delete_template"]
 
 def help_msg(e):
   dbs=" or ".join(supported_dbs)
   args=" or ".join(supported_dbs)
-  print(e+"\n\nUsage:\n\t\t"+sys.argv[0]+" [args...]\n\nargs:\n\t\tinit: to create \"config.json\" and \"app.py\" file that contains setup configurations.\n\t\tdb: to choose database type to use ( "+dbs+" )")
-  print('\nExample 1:\n\n\t'+sys.argv[0]+' init config\n\n\t'+sys.argv[0]+' init app\n\n\t'+sys.argv[0]+' db sqlite')
-  print('\nExample 2:\n\n\t'+sys.argv[0]+' init config\n\n\t'+sys.argv[0]+' init app\n\n\t'+sys.argv[0]+' db mysql')
+  print(e+"""
+
+Usage:
+        flask_plus [args...]
+args:
+        init: to create "config.json" and python files that contains code and setup configurations, and to install required packages 
+        db: to choose database type to use ( """+dbs+""" )
+        upgrade: to upgrade to the latest version of flask_plus package
+        examples: to show commands examples""")
+
+def examples_msg():
+ print("""
+Example 1 (database: SQLite) :
+
+        flask_plus init config
+        flask_plus db sqlite
+        flask_plus init app
+        flask_plus init install
+
+Example 2 (database: MySQL/MariaDB) :
+
+        flask_plus init config
+        flask_plus db mysql
+        flask_plus init app
+        flask_plus init install
+        
+Example 3 (database: PostgreSQL) :
+
+        flask_plus init config
+        flask_plus db postgresql
+        flask_plus init app
+        flask_plus init install
+
+Example 4 (database: MS SQL) :
+
+        flask_plus init config
+        flask_plus db mssql
+        flask_plus init app
+        flask_plus init install
+
+Example 5 (database: Oracle SQL) :
+
+        flask_plus init config
+        flask_plus db oracle
+        flask_plus init app
+        flask_plus init install""")
 
 
 
 def main():
- if len(sys.argv)<3:
+ if len(sys.argv)<2:
   help_msg("Missing arguments")
   sys.exit()
  if sys.argv[1] not in supported_args:
@@ -1459,6 +1567,15 @@ def main():
   sys.exit()
  if sys.argv[1]=="upgrade":
   upgrade()
+  sys.exit()
+ if sys.argv[1]=="examples":
+  examples_msg()
+  sys.exit()
+ if sys.argv[1]=="add_template":
+  add_template(sys.argv[2])
+  sys.exit()
+ if sys.argv[1]=="delete_template":
+  delete_template(sys.argv[2])
   sys.exit()
  if sys.argv[2] not in supported_dbs and sys.argv[2] not in supported_inits:
   help_msg('Unknown arguments')
@@ -1471,21 +1588,21 @@ def main():
    init_app()
   except Exception as e:
    print(e)
-   help_msg('Missing configs ! Try runing: '+sys.argv[0]+' init config')
+   help_msg('Missing configs ! Try runing: flask_plus init config')
   sys.exit()
  if sys.argv[1]=="init" and sys.argv[2]=="install":
   try:
    install()
   except Exception as e:
    print(e)
-   help_msg('Missing configs ! Try runing: '+sys.argv[0]+' init config')
+   help_msg('Missing configs ! Try runing: flask_plus init config')
   sys.exit()
  if sys.argv[1]=="db" and sys.argv[2] in supported_dbs:
   try:
    conf=read_configs()
   except Exception as ex:
    print(ex)
-   print('Failed to load configs !! Try to run first: '+sys.argv[0]+' init')
+   print('Failed to load configs !! Try to run first: flask_plus init')
    sys.exit()
   if  sys.argv[2]=="sqlite":
    set_sqlite_database(conf)
