@@ -40,6 +40,7 @@ def add_template(x):
   return 
  s="""
 
+
 @app.route('{}',methods=["GET","POST"])
 @safe_request
 @safe_files
@@ -47,6 +48,7 @@ def add_template(x):
 def {}():
  data={{"session":General_Model(**session),"title":"{}"}}
  return render_template("{}",**data)
+
 
 """.format(x,x[1:].replace('.','_').replace("/","_"),x.split("/")[-1].split('.')[0].replace("_"," ").replace("/"," ").strip(),x[1:])
  r.append(x)
@@ -77,6 +79,84 @@ def delete_template(x):
    else:
     s+=i.strip()
  write_file("templates.py",s+"\n\n")
+
+
+
+def add_route(x):
+  configs=read_configs()
+  home_page_redirect="/"
+  if configs["app"].get('templates',[])!=[]:
+   home_page_redirect=configs["app"]['templates'][0]
+  home_page='""'
+  if home_page_redirect!="/":
+   home_page="render_template('"+home_page_redirect+"')"
+  if x[:1]!="/":
+   x="/"+x
+  r=configs["app"].get("routes",[])
+  a=re.findall(r'<[^>]*>',x)
+  params=",".join([ i.replace('{','').replace('}','').replace('<','').replace('>','').split(':')[0] for i in a])
+  s=''
+  su=""
+  if len(params.strip())>0:
+   su="\n@safe_uri"
+  x="/"+"/".join([ i for i in x.split('/') if i.strip()!=""])
+  if x[:1]!="/":
+   x="/"+x
+  if x=="/":
+   s+="""
+
+
+@app.route('{}',methods=["GET","POST"])
+@safe_request
+@safe_files
+@endpoints_limiter.limit("3600/hour")
+def {}({}):
+ return {}
+
+
+""".format("/","home_root",'',home_page)
+  else:
+   s+="""
+
+
+@app.route('{}',methods=["GET","POST"])
+@safe_request
+@safe_files{}
+@endpoints_limiter.limit("3600/hour")
+def {}({}):
+ return ""
+
+
+""".format(x.replace('.','_'),su,x[1:].replace('{','').replace('}','_').replace('/','_').replace('<','').replace('>','_').replace(':','_').replace('.',''),params)
+
+  r.append(x)
+  configs["app"]["routes"]=r
+  write_configs(configs)
+  add_to_file("routes.py",s)
+
+
+def delete_route(x):
+ if x[:1]!="/":
+   x="/"+x
+ configs=read_configs()
+ r=configs["app"].get("routes",[])
+ if x not in r:
+  return 
+ r.remove(x)
+ configs["app"]["routes"]=r
+ write_configs(configs)
+ d=read_file("routes.py")
+ l=d.split("@app.route(")
+ s=''
+ for i in l:
+  if x not in i:
+   if "from wrappers import *" not in i:
+    s+="\n\n\n@app.route("+i.strip()
+   else:
+    s+=i.strip()
+ write_file("routes.py",s+"\n\n")
+
+
 
 
 
@@ -1253,6 +1333,9 @@ if __name__ == '__main__':
  if configs["app"].get('uploads',None)!=None:
   os.makedirs("uploads", exist_ok=True)
  os.makedirs("static", exist_ok=True)
+ os.makedirs("static/img", exist_ok=True)
+ os.makedirs("static/css", exist_ok=True)
+ os.makedirs("static/js", exist_ok=True)
  if configs["app"].get('templates',[])!=[]:
   for x in configs["app"].get('templates',[]):
    if file_exists("templates/"+x)==False:
@@ -1333,7 +1416,7 @@ def init_configs():
         "templates":
             ["index.html"],
         "static":
-            ["css/style.css","js/code.js","img/img.jpg"],
+            [],
         "uploads":
             [],
         "requirements":
@@ -1504,7 +1587,7 @@ def set_sqlite_database(data):
 
 supported_dbs=["sqlite","mysql","postgresql","mssql","oracle"]
 supported_inits=["app","config","install"]
-supported_args=["init","db","upgrade","examples","add_template","delete_template"]
+supported_args=["init","db","upgrade","examples","add_template","delete_template","add_route","delete_route"]
 
 def help_msg(e):
   dbs=" or ".join(supported_dbs)
@@ -1512,49 +1595,146 @@ def help_msg(e):
   print(e+"""
 
 Usage:
+        
         flask_plus [args...]
+
 args:
-        init: to create "config.json" and python files that contains code and setup configurations, and to install required packages 
+        
+
+        init: to create "config.json" and python files that contains 
+              code and setup configurations, and to install required packages 
+        
+
         db: to choose database type to use ( """+dbs+""" )
+        
+
         upgrade: to upgrade to the latest version of flask_plus package
-        examples: to show commands examples""")
+        
+
+        examples: to show commands examples
+        
+
+        add_template: create a template file with that path in the 
+                      templates folder,add the name to the "config.json" 
+                      file and add necessary code to "templates.py"
+        
+
+        delete_template: delete the template file with that path from the
+                         templates folder, remove the name from the 
+                         "config.json" file and delete the code from "templates.py"
+        
+
+        add_route: add the name to the "config.json" file and 
+                   add necessary code to "routes.py"
+        
+
+        delete_route: remove the name from the "config.json"
+                      file and delete the code from "routes.py"
+        """)
 
 def examples_msg():
- print("""
+ print("""** Creating a Project:
+
+
 Example 1 (database: SQLite) :
+
 
         flask_plus init config
         flask_plus db sqlite
         flask_plus init app
         flask_plus init install
 
+
 Example 2 (database: MySQL/MariaDB) :
+
 
         flask_plus init config
         flask_plus db mysql
         flask_plus init app
         flask_plus init install
         
+
 Example 3 (database: PostgreSQL) :
+
 
         flask_plus init config
         flask_plus db postgresql
         flask_plus init app
         flask_plus init install
 
+
 Example 4 (database: MS SQL) :
+
 
         flask_plus init config
         flask_plus db mssql
         flask_plus init app
         flask_plus init install
 
+
 Example 5 (database: Oracle SQL) :
+
 
         flask_plus init config
         flask_plus db oracle
         flask_plus init app
-        flask_plus init install""")
+        flask_plus init install
+
+
+
+
+** Add a template to the project:
+
+
+Example:
+
+
+        flask_plus add_template "admin/login.html"
+
+
+
+
+** Remove a template from the project:
+
+
+Example:
+
+
+        flask_plus delete_template "admin/login.html"
+
+
+
+
+** Add a route to the project:
+
+
+Example 1:
+
+
+        flask_plus add_route "admin/upload"
+
+
+Example 2:
+
+
+        flask_plus add_route "/profile/<user_id>"
+
+
+
+
+** Remove a route from the project:
+
+
+Example 1:
+
+
+        flask_plus delete_route "admin/upload"
+
+
+Example 2:
+
+
+        flask_plus delete_route "/profile/<user_id>" """)
 
 
 
@@ -1576,6 +1756,12 @@ def main():
   sys.exit()
  if sys.argv[1]=="delete_template":
   delete_template(sys.argv[2])
+  sys.exit()
+ if sys.argv[1]=="add_route":
+  add_route(sys.argv[2])
+  sys.exit()
+ if sys.argv[1]=="delete_route":
+  delete_route(sys.argv[2])
   sys.exit()
  if sys.argv[2] not in supported_dbs and sys.argv[2] not in supported_inits:
   help_msg('Unknown arguments')
@@ -1614,5 +1800,4 @@ def main():
   help_msg('Unknown Database type')
  sys.exit() 
 
-
-main()
+	
