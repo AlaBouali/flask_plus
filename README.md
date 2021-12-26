@@ -1,5 +1,5 @@
 # flask_plus
-Flask module to auto setup the project's configurations (app and database)
+Flask module to auto setup and manage the project and its configurations (app code, templates, databases...)
 # Usage:
 <div style="background: #f8f8f8; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%">
 Usage:
