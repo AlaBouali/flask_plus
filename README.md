@@ -50,6 +50,14 @@ args:
                           file to the local configs file
 
 </pre></div>
+# Manager
+
+<img src='https://raw.githubusercontent.com/AlaBouali/flask_plus/main/img/cap1.png?token=AGZMSMPP3UTXGFNX25I7NTTB2SACI'>
+
+<img src='https://raw.githubusercontent.com/AlaBouali/flask_plus/main/img/cap2.png?token=AGZMSMLQGZQE5BTJHJE7AQ3B2SAHY'>
+
+<img src='https://raw.githubusercontent.com/AlaBouali/flask_plus/main/img/cap3.png?token=AGZMSMPB3YH7BCVAPJYVWVLB2SAK4'>
+
 # Commands examples:
 <div style="background: #f8f8f8; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%">
 ** Launching the web interface:
