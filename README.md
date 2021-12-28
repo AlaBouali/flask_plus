@@ -1,5 +1,23 @@
-# flask_plus
+# Flask_plus
 Flask module to auto setup and manage the project and its configurations (app code, templates, databases...)
+
+# Why should I use Flask_plus's framework?
+
+Flask_plus will do most of the work for you ! It will:
+<ul>
+<li>Create/Delete routes/templates from the project's files and code.</li>
+<li>Create necessary codes, database, tables, files and folders when you initialize the project, leaving to you only editing the templates and adding some code to "template.py and "routes.py" when needed !</li>
+<li>It's compatible with: SQLite, MySQL, MariaDB, PostgreSQL, Oracle SQL and MS SQL. You can switch between them with a single command any time.</li>
+<!--<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>
+<li></li>-->
+</ul>
 # Usage:
 <div style="background: #f8f8f8; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%">
 Usage:
