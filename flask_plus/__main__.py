@@ -1711,7 +1711,7 @@ Usage:
 args:
         
 
-        manager: to launch the wen interface and manage the project from there
+        manager: to launch the web interface and manage the project from there
         
 
         examples: to show commands examples
@@ -2104,10 +2104,10 @@ html body {
     </style>
 
     <meta name="Title" CONTENT="Flask_plus's project manager">
-    <title>Flask_plus's project manager</title>
+    <title>Flask +'s project manager</title>
 </head>
 <body><br>
-<center><h1>Flask Plus's project manager</h1></center>
+<center><h1>Flask +'s project manager</h1></center>
 
 
 <center>
@@ -2234,7 +2234,7 @@ html body {
 <br><br> 
 <br> <br>   
 </center>
-<center><h4>&copy; Copyright <a href="https://github.com/AlaBouali" target="_blank">Ala Bouali</a><br><br></h4><h6><center>Python/PHP Dev since 2017, Pentester, Linux<br> Expert and Freelancer since 2019
+<center><h4>&copy; Copyright <a href="https://github.com/AlaBouali" target="_blank">Ala Bouali</a><br><br></h4><h6><center>Python/PHP Dev since 2017, Pentester, Linux<br> System Administrator and Freelancer since 2019
 <br><br><br>See Also:&nbsp;&nbsp;<a href="https://github.com/AlaBouali/bane" target="_blank">Bane</a>&nbsp;,&nbsp;<a href="https://github.com/AlaBouali/xtelnet" target="_blank">Xtelnet</a>&nbsp;,&nbsp;<a href="https://github.com/AlaBouali/sanitizy" target="_blank">Sanitizy</a><br></h6></center><br>"""
  
  app.run(port=12345)
