@@ -2106,7 +2106,7 @@ html body {
     <meta name="Title" CONTENT="Flask_plus's project manager">
     <title>Flask_plus's project manager</title>
 </head>
-<body>
+<body><br>
 <center><h1>Flask Plus's project manager</h1></center>
 
 
@@ -2222,7 +2222,7 @@ html body {
 <br><br>   <br>   
 <center><h3>Upgrade the package</h3>
 <br>   
-         <form enctype="multipart/form-data" id="myform" action = "/fsb_conf" method = "POST" 
+         <form enctype="multipart/form-data" id="myform" action = "/upgrade" method = "POST" 
          enctype = "multipart/form-data"><table id="form_" cellspacing="0" cellpadding="0">
          <div class="input-group input-group-lg">
          <tr><td><div class="col text-center"><input id="btn" type="submit" class="button btn-block btn-lg" value="Upgrade" /></div></td></tr>
@@ -2232,10 +2232,10 @@ html body {
         
       </center>
 <br><br> 
-<br>   
+<br> <br>   
 </center>
-<center><h4>&copy; Copyright <a href="https://github.com/AlaBouali" target="_blank">Ala Bouali</a><br><br></h4><h6><center>Python/PHP Dev since 2017, Pentester, Linux<br> Expert and Freelancer since 2019<center></h6></center>
-      """
+<center><h4>&copy; Copyright <a href="https://github.com/AlaBouali" target="_blank">Ala Bouali</a><br><br></h4><h6><center>Python/PHP Dev since 2017, Pentester, Linux<br> Expert and Freelancer since 2019
+<br><br><br>See Also:&nbsp;&nbsp;<a href="https://github.com/AlaBouali/bane" target="_blank">Bane</a>&nbsp;,&nbsp;<a href="https://github.com/AlaBouali/xtelnet" target="_blank">Xtelnet</a>&nbsp;,&nbsp;<a href="https://github.com/AlaBouali/sanitizy" target="_blank">Sanitizy</a><br></h6></center><br>"""
  
  app.run(port=12345)
 
