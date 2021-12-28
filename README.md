@@ -100,6 +100,14 @@ then open this link :
 
 <img src='https://raw.githubusercontent.com/AlaBouali/flask_plus/main/img/cap3.png?token=AGZMSMPB3YH7BCVAPJYVWVLB2SAK4'>
 
+# Running the application
+
+<div style="background: #f8f8f8; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%">
+python app.py</pre></div>
+or
+<div style="background: #f8f8f8; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%">
+python3 app.py</pre></div>
+
 # Commands examples:
 You can also manage your project from the command line with the following commands ( just examples ) :
 <div style="background: #f8f8f8; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%">
