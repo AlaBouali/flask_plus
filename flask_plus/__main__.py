@@ -1180,7 +1180,7 @@ def delete_file_firebase(file_name):
 
 
 def upload_to_firebase(f):
- p=bind_path(uploads_folder,'tmp')
+ p=bind_path('tmp','firebase')
  path=save_file(f,path=p)
  storage_client = storage.Client()
  bucket = storage_client.bucket(firebase_storage_bucket)
@@ -1221,7 +1221,14 @@ def list_contains(l,s):
 
 
 
-def send_mail(subject='',sender=app.config['MAIL_USERNAME'],recipients=[],body='',html='',attachements=[]):
+def send_mail(subject='',sender=app.config['MAIL_USERNAME'],recipients=[],body='',html='',local_attachements=[],user_attachements=None):
+   attachements=[]
+   remote_files=[]
+   if user_attachements!=None:
+    remote_files=[save_file(user_attachements.files[x],path=bind_path('tmp','mail')) for x in user_attachements.files]
+   attachements+=remote_files
+   if local_attachements!=None:
+    attachements+=local_attachements
    if recipients==None or len(recipients)==0:
     raise Exception("You need to set a least 1 recipient !!")
    if type(recipients)==str:
@@ -1230,8 +1237,14 @@ def send_mail(subject='',sender=app.config['MAIL_USERNAME'],recipients=[],body='
    msg.body=body
    msg.html = html
    for x in  attachements:
-    msg.attach(os.path.split(x)[1],mimetypes.guess_type(x)[0],read_file(x))  
-   Flask_Mailler.send(msg)
+    msg.attach(os.path.split(x)[1],mimetypes.guess_type(x)[0],read_file(x)) 
+   ex=None
+   try:
+    Flask_Mailler.send(msg)
+   except Exception as ex:
+    for x in remote_files:
+     delete_file(x)
+    raise(ex)
 
 
 
@@ -1388,6 +1401,8 @@ if __name__ == '__main__':
  if configs["app"].get('uploads',None)!=None:
   os.makedirs("uploads", exist_ok=True)
  os.makedirs("static", exist_ok=True)
+ os.makedirs("tmp/firebase", exist_ok=True)
+ os.makedirs("tmp/mail", exist_ok=True)
  os.makedirs("static/img", exist_ok=True)
  os.makedirs("static/css", exist_ok=True)
  os.makedirs("static/js", exist_ok=True)
@@ -1475,7 +1490,7 @@ def init_configs():
                 'X-Frame-Options':'SAMEORIGIN',
                 'X-Content-Type-Options': 'nosniff',
                 'Referrer-Policy': 'same-origin',
-                'Server':server_signature,
+                'Server':flask_plus_version,
                 'X-Permitted-Cross-Domain-Policies': 'none',
                 'Permissions-Policy': "geolocation 'none'; camera 'none'; speaker 'none';"
                 },
@@ -1894,7 +1909,10 @@ def csrf_referer_checker(req,allowed_domains=[]):
 
 
 def get_templates_routes():
- d=read_configs()
+ try:
+  d=read_configs()
+ except:
+  return ''
  return ''.join([ "<option value='{}'>{}</option>".format(x,x) for x in d["app"]["templates"]+d["app"]["routes"]])
 
 
@@ -1958,8 +1976,9 @@ def manager():
  
  @app.route('/fsb_conf',methods=["POST"])
  def fsb_conf():
+  d=read_configs()
   t=save_file(request.files["path"])
-  if t!="firebase_creds.json":
+  if t.endswith(d["app"]["firebase_creds_file"]):
    write_firebase_configs_(t)
    os.remove(t)
   return redirect('/') 
@@ -2062,9 +2081,6 @@ html body {
 <center><h1>Flask Plus's project manager</h1></center>
 
 <br><br>
-     <h2>Project</h2>
-     <details>
-  <summary></summary>
      <center><h3>Create/Reset project</h3>
          <form enctype="multipart/form-data" id="myform" action = "/create" method = "POST" 
          enctype = "multipart/form-data"><table id="form_" cellspacing="0" cellpadding="0">
@@ -2177,7 +2193,10 @@ html body {
       </form>  
         
       </center>
-<br><br>  
+<br><br> 
+<h2>Project</h2>
+     <details>
+  <summary></summary> 
 </details>   
 
       """
