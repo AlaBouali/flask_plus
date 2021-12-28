@@ -2104,10 +2104,10 @@ html body {
     </style>
 
     <meta name="Title" CONTENT="Flask_plus's project manager">
-    <title>Flask +'s project manager</title>
+    <title>Flask+ 's project manager</title>
 </head>
 <body><br>
-<center><h1>Flask +'s project manager</h1></center>
+<center><h1>Flask+ 's project manager</h1></center>
 
 
 <center>
