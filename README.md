@@ -9,7 +9,7 @@ Usage:
 args:
 
 
-        manager: to launch the wen interface and manage the project from there
+        manager: to launch the web interface and manage the project from there
 
 
         examples: to show commands examples
