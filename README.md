@@ -51,7 +51,22 @@ args:
 
 </pre></div>
 # Manager
+To use flask_plus's manager run the following commands ( suppose we will call the project "flask_proj" ) :
+<div style="background: #f8f8f8; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%">
 
+mkdir flask_proj
+
+cd flask_proj
+
+flask_plus manager
+
+</pre></div>
+then open this link :
+<br>
+<br>
+<a href='http://127.0.0.1:12345/'>http://127.0.0.1:12345/</a>
+<br>
+<br>
 <img src='https://raw.githubusercontent.com/AlaBouali/flask_plus/main/img/cap1.png?token=AGZMSMPP3UTXGFNX25I7NTTB2SACI'>
 
 <img src='https://raw.githubusercontent.com/AlaBouali/flask_plus/main/img/cap2.png?token=AGZMSMLQGZQE5BTJHJE7AQ3B2SAHY'>
