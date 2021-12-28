@@ -10,7 +10,7 @@ Flask module to auto setup and manage the project and its configurations (app co
 <li>Compatible with: SQLite, MySQL, MariaDB, PostgreSQL, Oracle SQL and MS SQL. You can switch between them with a single command any time.</li>
 <li>Built-in functions ( in "utils.py" , "database.py" and "handlings.py") and decorators ( in "wrappers.py" ) to minimize the amount of code you write and maximize the security level of the projects.</li>
 <li>Have customizable configurations at "settings.py" which most of them are loaded from "config.json" ( created on the project's creation ) which is also updated when the configurations are changed, every time the application starts.</li>
-<li>save files locally, filter them by their mimetypes and extensions, and serve them securily.</li>
+<li>Save files locally, filter them by their mimetypes and extensions, and serve them securily.</li>
 <li>Upload files to firebase.</li>
 <li>Send mail.</li>
 <li>High level access control ( visitor , user , admin ) achieved with the decorators.</li>
@@ -20,6 +20,7 @@ Flask module to auto setup and manage the project and its configurations (app co
 <li>Supports rate-limit and google's Recaptcha.</li>
 <li>Clickjacking protection.</li>
 <li>XSS protection.</li>
+<li>CORS's protection by validating the origin of the request.</li>
 <li>Built-in functions to validate user's input against: SSRF and Path Traversal.</li>
 <li>Ready to deploy directly on Heroku or shared Hosting site.</li>
 </ul>
