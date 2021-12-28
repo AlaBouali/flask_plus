@@ -9,6 +9,9 @@ Usage:
 args:
 
 
+        manager: to launch the wen interface and manage the project from there
+
+
         examples: to show commands examples
 
 
@@ -39,6 +42,12 @@ args:
         delete_route: remove the name from the "config.json"
                       file and delete the code from "routes.py"
 
+
+        firebase_bucket: set the firebase storage bucket
+
+
+        firebase_configs: copy the firebase storage bucket's configs'
+                          file to the local configs file
 
 </pre></div>
 # Commands examples:
