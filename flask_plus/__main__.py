@@ -6,6 +6,10 @@ from flask import request,Flask,redirect
 flask_plus_version="Flask_Plus_Python"
 
 
+def bind_path(*args):
+ seperate='\\' if (sys.platform.lower() == "win32") or( sys.platform.lower() == "win64") else '/'
+ return seperate.join(args)
+
 def write_configs(d):
  with open('config.json', 'w') as f:
      json.dump(d, f, indent=4)
@@ -240,10 +244,6 @@ database_type='"""+configs["database"].get("database_type",'sqlite')+"""'
 
 
 
-def pyodbc_to_dict(row):
-    return dict(zip([t[0] for t in row.cursor_description], row))
-
-
 
 
 
@@ -326,13 +326,17 @@ def database_fetch_one(sql,*args):
  c=get_database_connection()
  cur=get_connection_cursor(c)
  cur.execute(sql,a)
+ if database_type=="mssql":
+   columns = [column[0] for column in cur.description]
+   rs=cur.fetchone()
+   close_object(cur)
+   close_object(c)
+   return  dict(zip(columns, rs))
  if database_type=="oracle":
   cur.rowfactory = lambda *args: dict(zip([d[0] for d in curs.description], args))
  r=cur.fetchone()
  close_object(cur)
  close_object(c)
- if database_type=="mssql":
-  return pyodbc_to_dict(r)
  return r
  
 
@@ -347,13 +351,17 @@ def database_fetch_all(sql,*args):
  c=get_database_connection()
  cur=get_connection_cursor(c)
  cur.execute(sql,a)
+ if database_type=="mssql":
+   columns = [column[0] for column in cur.description]
+   rs=cur.fetchall()
+   close_object(cur)
+   close_object(c)
+   return  [dict(zip(columns, x)) for x in rs]
  if database_type=="oracle":
   cur.rowfactory = lambda *args: dict(zip([d[0] for d in curs.description], args))
  r=cur.fetchall()
  close_object(cur)
  close_object(c)
- if database_type=="mssql":
-  return [pyodbc_to_dict(r) for x in r]
  return r
 """
 
@@ -766,17 +774,17 @@ endpoints_limiter=flask_limiter.Limiter(app, key_func=get_remote_address, defaul
 server_signature='"""+flask_plus_version+"""'
 
 
-accepted_referer_domains=[]
+accepted_referer_domains="""+str(configs["app"]["accepted_referer_domains"])+"""
 
-accepted_origin_domains=[]
+accepted_origin_domains="""+str(configs["app"]["accepted_origin_domains"])+"""
 
 #global important variables
 
 
-allowed_file_extensions=['png','jpg','jpeg','gif','pdf']
+allowed_file_extensions="""+str(configs["app"]["allowed_file_extensions"])+"""
 
 
-allowed_mimetypes_=["application/pdf","application/x-pdf","image/png","image/jpg","image/jpeg","image/jpeg"]
+allowed_mimetypes_="""+str(configs["app"]["allowed_mimetypes"])+"""
 
 
 
@@ -785,7 +793,7 @@ permanent_session=True
 
 
 additional_headers={'X-Frame-Options':'SAMEORIGIN','X-Content-Type-Options': 'nosniff','Referrer-Policy': 'same-origin','Server':server_signature,'X-Permitted-Cross-Domain-Policies': 'none','Permissions-Policy': "geolocation 'none'; camera 'none'; speaker 'none';"}
-
+'''
 
 whitelist_external_sources=False
 
@@ -835,7 +843,7 @@ if len(img_domains)>0:
 if whitelist_external_sources==True:
  additional_headers.update({'X-XSS-Protection': '0','Content-Security-Policy': " ; ".join([script_src,style_src,font_src,img_src])})
 
-
+'''
 unwanted_headers=[]
 
 
@@ -865,10 +873,10 @@ downloads_folder="uploads"
 
 #sensitive files that shouldn't be accessed by the user (downloaded for example)
 
-sensitive_files=('pyc','.py', '.sql','.db')
+sensitive_files="""+str(configs["app"]["sensitive_files"])+"""
 
 
-basedir=os.getcwd()
+app_basedir=os.getcwd()
 
 
 #the templates' folder
@@ -1207,7 +1215,7 @@ def no_ssrf(p):
 
 
 def is_safe_path( path,root_dir=downloads_folder):
-  return os.path.realpath(path).startswith(basedir+'\\\\'+root_dir if ((sys.platform.lower() == "win32") or( sys.platform.lower() == "win64")) else basedir+'/'+root_dir)
+  return os.path.realpath(path).startswith(app_basedir+'\\\\'+root_dir if ((sys.platform.lower() == "win32") or( sys.platform.lower() == "win64")) else app_basedir+'/'+root_dir)
 
 
 
@@ -1225,7 +1233,7 @@ def send_mail(subject='',sender=app.config['MAIL_USERNAME'],recipients=[],body='
    attachements=[]
    remote_files=[]
    if user_attachements!=None:
-    remote_files=[save_file(user_attachements.files[x],path=bind_path('tmp','mail')) for x in user_attachements.files]
+    remote_files=[save_file(user_attachements[x],path=bind_path('tmp','mail')) for x in user_attachements.files]
    attachements+=remote_files
    if local_attachements!=None:
     attachements+=local_attachements
@@ -1269,6 +1277,11 @@ def update_configs():
  d=read_configs()
  d["app"]["additional_headers"]=additional_headers
  d["app"]["run"]=app_conf
+ d["app"]["sensitive_files"]=sensitive_files
+ d["app"]["allowed_file_extensions"]=allowed_file_extensions
+ d["app"]["allowed_mimetypes"]=allowed_mimetypes_
+ d["app"]["accepted_referer_domains"]=accepted_referer_domains
+ d["app"]["accepted_origin_domains"]=accepted_origin_domains
  d["app"]["config"]=server_conf
  write_configs(d)
 
@@ -1276,7 +1289,6 @@ def update_configs():
 
 
 def download_this(path,root_dir=downloads_folder):
- path=unescape_sqli(path)
  if is_safe_path(path,root_dir=root_dir)==True:
   if os.path.exists(path):
    return send_file(path, as_attachment=True)
@@ -1374,7 +1386,7 @@ def static2__(file_type,static_file):
 @app.route('/'+downloads_folder+'/<file>', methods = ['GET'])
 def downloads(file):
  path="{}/{}".format(downloads_folder,file)
- if path.lower().endswith(sensitive_files):
+ if path.lower().endswith(tuple(sensitive_files)):
    return "Not Found",404
  return download_this(path)
 """
@@ -1481,6 +1493,16 @@ def init_configs():
                 {
                     "days": 30
                 },
+        "sensitive_files":
+                ['.pyc','.py', '.sql','.db'],
+        "allowed_file_extensions":
+                ['png','jpg','jpeg','gif','pdf'],
+        "allowed_mimetypes":
+                ["application/pdf","application/x-pdf","image/png","image/jpg","image/jpeg","image/jpeg"],
+        "accepted_referer_domains":
+                [],
+        "accepted_origin_domains":
+                [],
         "firebase_creds_file":
                 "firebase_creds.json",
         "firebase_bucket":
@@ -1648,8 +1670,9 @@ def set_database(data,db):
 
 
 
-def save_file(f):
- return sanitizy.FILE_UPLOAD.save_file(f,path='.')
+def save_file(f,path='tmp'):
+ os.makedirs(path, exist_ok=True)
+ return sanitizy.FILE_UPLOAD.save_file(f,path=path)
 
 
 def set_sqlite_database(data):
@@ -1977,10 +2000,9 @@ def manager():
  @app.route('/fsb_conf',methods=["POST"])
  def fsb_conf():
   d=read_configs()
-  t=save_file(request.files["path"])
-  if t.endswith(d["app"]["firebase_creds_file"]):
-   write_firebase_configs_(t)
-   os.remove(t)
+  t=save_file(request.files["path"],path=bind_path('tmp','config'))
+  write_firebase_configs_(t)
+  os.remove(t)
   return redirect('/') 
   
  
@@ -2063,7 +2085,13 @@ html body {
 	[class*="col-"] {
 		width: 100%;
 	}
+
 </style>
+<style>
+        div.list {
+            text-align: center;
+        }
+    </style>
 <style media = "screen">
         .ads {
             text-align: center;
@@ -2074,18 +2102,22 @@ html body {
             right: 1%;
         }
     </style>
-    <meta name="Title" CONTENT="Bane's web app scanner !! The best online vulnerability scanner">
+
+    <meta name="Title" CONTENT="Flask_plus's project manager">
     <title>Flask_plus's project manager</title>
 </head>
 <body>
 <center><h1>Flask Plus's project manager</h1></center>
 
-<br><br>
+
+<center>
+<br><br>  <br>    
      <center><h3>Create/Reset project</h3>
+     <br>   
          <form enctype="multipart/form-data" id="myform" action = "/create" method = "POST" 
          enctype = "multipart/form-data"><table id="form_" cellspacing="0" cellpadding="0">
          <div class="input-group input-group-lg">
-         <tr><td style="text-align: center; vertical-align: middle;"><b><p style='color:green'>Database:</p></b> </td><td>
+         <tr><td style="text-align: center; vertical-align: middle;"><b><p style='color:green'>Database: &nbsp;  &nbsp; </p></b> </td><td>
          <select class="form-control" name="db" id="db">
          <option value="sqlite">SQLite</option>
          <option value="mysql">MySQL/MariaDB</option>
@@ -2099,12 +2131,13 @@ html body {
       </form>  
        
       </center>
-<br><br>
+<br><br><br>   
 <center><h3>Change Database</h3>
+<br>   
          <form enctype="multipart/form-data" id="myform" action = "/db" method = "POST" 
          enctype = "multipart/form-data"><table id="form_" cellspacing="0" cellpadding="0">
          <div class="input-group input-group-lg">
-         <tr><td style="text-align: center; vertical-align: middle;"><b><p style='color:green'>Database:</p></b> </td><td>
+         <tr><td style="text-align: center; vertical-align: middle;"><b><p style='color:green'>Database:&nbsp;  &nbsp;</p></b> </td><td>
          <select class="form-control" name="db" id="db">
          <option value="sqlite">SQLite</option>
          <option value="mysql">MySQL/MariaDB</option>
@@ -2118,12 +2151,13 @@ html body {
       </form>  
        
       </center>
-<br><br>
+<br><br><br>   
      <center><h3>Add Template/Route</h3>
+     <br>   
          <form enctype="multipart/form-data" id="myform" action = "/add" method = "POST" 
          enctype = "multipart/form-data"><table id="form_" cellspacing="0" cellpadding="0">
          <div class="input-group input-group-lg">
-         <tr><td style="text-align: center; vertical-align: middle;"><b><p style='color:green'>Path(s):</p></b> </td>
+         <tr><td style="text-align: center; vertical-align: middle;"><b><p style='color:green'>Path(s):&nbsp;  &nbsp;</p></b> </td>
          <td><input size="40" value='' placeholder="/welcome.html , /admin/home.html" class="form-control" id="template" type = "text" name = "template" required/>
          <td><select class="form-control" name="type" id="type">
          <option value="template">Template</option>
@@ -2135,13 +2169,14 @@ html body {
       </form>  
         
       </center>
-<br><br>     
+<br><br> <br>       
  
      <center><h3>Delete Template/Route</h3>
+     <br>   
          <form enctype="multipart/form-data" id="myform" action = "/delete" method = "POST" 
          enctype = "multipart/form-data"><table id="form_" cellspacing="0" cellpadding="0">
          <div class="input-group input-group-lg">
-         <tr><td style="text-align: center; vertical-align: middle;"><b><p style='color:green'>Path:</p></b> </td>
+         <tr><td style="text-align: center; vertical-align: middle;"><b><p style='color:green'>Path:&nbsp;  &nbsp;</p></b> </td>
          <td><select class="form-control" name="template" id="template">
          """+tr+"""
          
@@ -2156,12 +2191,13 @@ html body {
       </form>  
         
       </center>
-<br><br>     
+<br><br>    <br>    
 <center><h3>Set Firebase Storage Bucket</h3>
+<br>   
          <form enctype="multipart/form-data" id="myform" action = "/fsb" method = "POST" 
          enctype = "multipart/form-data"><table id="form_" cellspacing="0" cellpadding="0">
          <div class="input-group input-group-lg">
-         <tr><td style="text-align: center; vertical-align: middle;"><b><p style='color:green'>Name:</p></b> </td>
+         <tr><td style="text-align: center; vertical-align: middle;"><b><p style='color:green'>Name:&nbsp;  &nbsp;</p></b> </td>
          <td><input size="40" value='' placeholder="myfbbucket.appspot.com" class="form-control" id="name" type = "text" name = "name" required/>
          </td><td><div class="col text-center"><input id="btn" type="submit" class="button btn-block btn-lg" value="Set" /></div></td></tr>
       </table>
@@ -2169,12 +2205,13 @@ html body {
       </form>  
         
       </center>
-<br><br>     
+<br><br>   <br>     
 <center><h3>Set Firebase Storage Bucket's Config file</h3>
+<br>   
          <form enctype="multipart/form-data" id="myform" action = "/fsb_conf" method = "POST" 
          enctype = "multipart/form-data"><table id="form_" cellspacing="0" cellpadding="0">
          <div class="input-group input-group-lg">
-         <tr><td style="text-align: center; vertical-align: middle;"><b><p style='color:green'>File:</p></b> </td>
+         <tr><td style="text-align: center; vertical-align: middle;"><b><p style='color:green'>File:&nbsp;  &nbsp;</p></b> </td>
          <td><input size="40" value='' class="form-control" id="path" type = "file" name = "path" required/>
          </td><td><div class="col text-center"><input id="btn" type="submit" class="button btn-block btn-lg" value="Set" /></div></td></tr>
       </table>
@@ -2182,8 +2219,9 @@ html body {
       </form>  
         
       </center>
-<br><br>   
+<br><br>   <br>   
 <center><h3>Upgrade the package</h3>
+<br>   
          <form enctype="multipart/form-data" id="myform" action = "/fsb_conf" method = "POST" 
          enctype = "multipart/form-data"><table id="form_" cellspacing="0" cellpadding="0">
          <div class="input-group input-group-lg">
@@ -2194,11 +2232,9 @@ html body {
         
       </center>
 <br><br> 
-<h2>Project</h2>
-     <details>
-  <summary></summary> 
-</details>   
-
+<br>   
+</center>
+<center><h4>&copy; Copyright <a href="https://github.com/AlaBouali" target="_blank">Ala Bouali</a><br><br></h4><h6><center>Python/PHP Dev since 2017, Pentester, Linux<br> Expert and Freelancer since 2019<center></h6></center>
       """
  
  app.run(port=12345)
