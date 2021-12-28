@@ -43,6 +43,28 @@ args:
 </pre></div>
 # Commands examples:
 <div style="background: #f8f8f8; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%">
+** Launching the web interface:
+
+
+Example:
+
+
+        flask_plus manager
+
+
+
+
+** Upgrading the package:
+
+
+Example:
+
+
+        flask_plus upgrade
+
+
+
+
 ** Creating a Project:
 
 
@@ -145,4 +167,49 @@ Example 2:
 
 
         flask_plus delete_route "/profile/<user_id>"
+
+
+
+
+** Set firebase storage bucket:
+
+
+Example :
+
+
+        flask_plus firebase_bucket "myfbbucket.appspot.com"
+
+
+
+
+** Copy firebase storage bucket's config file to local config file:
+
+
+Example 1 (Non-Windows):
+
+
+        flask_plus firebase_configs "/home/root/configs.json"
+
+
+Example 2 (Windows):
+
+
+        flask_plus firebase_configs "C:\Users\user\Desktop\configs.json"
+
+
+
+
+** Change Database type:
+
+
+Example 1:
+
+
+        flask_plus db mysql
+
+
+Example 2:
+
+
+        flask_plus db postgresql
 </pre></div>
