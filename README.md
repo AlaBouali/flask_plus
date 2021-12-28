@@ -3,22 +3,29 @@ Flask module to auto setup and manage the project and its configurations (app co
 
 # Why should I use Flask_plus's framework?
 <br>
-<h2>Flask_plus will do most of the work for you !</h2>
+<h2>Flask_plus will do most of the work for you ! ALL and KEEPING THE FLEXIBILITY AND SIMPLICITY OF FLASK !!</h2>
 <ul>
-<li>Create/Delete routes/templates from the project's files and code.</li>
 <li>Create necessary codes, database, tables, files and folders when you initialize the project, leaving to you only editing the templates and adding some code to "template.py and "routes.py" when needed !</li>
-<li>It's compatible with: SQLite, MySQL, MariaDB, PostgreSQL, Oracle SQL and MS SQL. You can switch between them with a single command any time.</li>
-<!--<li></li>
-<li></li>
-<li></li>
-<li></li>
-<li></li>
-<li></li>
-<li></li>
-<li></li>
-<li></li>-->
+<li>Add/Delete routes/templates to/from the project's files and code in "template.py and "routes.py"</li>
+<li>Compatible with: SQLite, MySQL, MariaDB, PostgreSQL, Oracle SQL and MS SQL. You can switch between them with a single command any time.</li>
+<li>Built-in functions ( in "utils.py" , "database.py" and "handlings.py") and decorators ( in "wrappers.py" ) to minimize the amount of code you write and maximize the security level of the projects.</li>
+<li>Have customizable configurations at "settings.py" which most of them are loaded from "config.json" ( created on the project's creation ) which is also updated when the configurations are changed, every time the application starts.</li>
+<li>save files locally, filter them by their mimetypes and extensions, and serve them securily.</li>
+<li>Upload files to firebase.</li>
+<li>Send mail.</li>
+<li>High level access control ( visitor , user , admin ) achieved with the decorators.</li>
+<li>Secure the application from SQL-Injection by auto-escape: URL arguments, request's body's parameters and dynamic URIs.</li>
+<li>Supports JWT-Authentication.</li>
+<li>CSRF protection by: checking the referer header and/or CSRF token.</li>
+<li>Supports rate-limit and google's Recaptcha.</li>
+<li>Clickjacking protection.</li>
+<li>XSS protection.</li>
+<li>Built-in functions to validate user's input against: SSRF and Path Traversal.</li>
+<li>Ready to deploy directly on Heroku or shared Hosting site.</li>
 </ul>
 <br>
+The security in the this project is achieved via <a href="https://gitub.com/AlaBouali/sanitizy">sanitizy</a><br>
+
 
 # Usage:
 <div style="background: #f8f8f8; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%">
