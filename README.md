@@ -3,8 +3,8 @@ Flask module to auto setup and manage the project and its configurations (app co
 
 # Why should I use Flask_plus's framework?
 
-Flask_plus will do most of the work for you !
-<br>It can:
+<h2>Flask_plus will do most of the work for you !</h2>
+It can:
 <ul>
 <li>Create/Delete routes/templates from the project's files and code.</li>
 <li>Create necessary codes, database, tables, files and folders when you initialize the project, leaving to you only editing the templates and adding some code to "template.py and "routes.py" when needed !</li>
