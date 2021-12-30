@@ -3,7 +3,9 @@ import json,pymysql,random,time,sqlite3,sys,re,os,pip,psycopg2,pyodbc,datetime,c
 
 from flask import request,Flask,redirect
 
-flask_plus_version="Flask_Plus_Python"
+__version__="1.0.0"
+
+flask_plus_version="Flask_Plus/Python {}".format(__version__)
 
 
 def bind_path(*args):
@@ -2124,10 +2126,10 @@ html body {
     </style>
 
     <meta name="Title" CONTENT="Flask_plus's project manager">
-    <title>Flask+ 's project manager</title>
+    <title>Flask+ 's project manager """+__version__+"""</title>
 </head>
 <body><br>
-<center><h1>Flask+ 's project manager</h1></center>
+<center><h1>Flask+ 's project manager<br>v"""+__version__+"""</h1></center>
 
 
 <center>
