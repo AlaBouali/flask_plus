@@ -1,11 +1,11 @@
 #coding: utf-8
 import json,pymysql,random,time,sqlite3,sys,re,os,pip,psycopg2,pyodbc,datetime,cx_Oracle,shutil,sanitizy
 
-from flask import request,Flask,redirect
+from flask import request,Flask,redirect,send_file
 
 __version__="1.0.0"
 
-flask_plus_version="Flask_Plus/Python {}".format(__version__)
+flask_man_version="flask_man/Python {}".format(__version__)
 
 
 def bind_path(*args):
@@ -203,7 +203,7 @@ def delete_route(x):
 
 def upgrade():
  p="pip" if sys.version_info < (3,0) else "pip3"
- os.system(p+" install flask_plus -U")
+ os.system(p+" install flask_man -U")
 
 
 def file_exists(path):
@@ -781,7 +781,7 @@ authorization_header='Auth-Token'
 endpoints_limiter=flask_limiter.Limiter(app, key_func=get_remote_address, default_limits=[])
 
 
-server_signature='"""+flask_plus_version+"""'
+server_signature='"""+flask_man_version+"""'
 
 
 accepted_referer_domains="""+str(configs["app"]["accepted_referer_domains"])+"""
@@ -1435,7 +1435,8 @@ if __name__ == '__main__':
  if configs["app"].get('uploads',None)!=None:
   os.makedirs("uploads", exist_ok=True)
  os.makedirs("static", exist_ok=True)
- os.makedirs("tmp/mail", exist_ok=True)
+ os.makedirs("tmp", exist_ok=True)
+ os.makedirs("backup", exist_ok=True)
  os.makedirs("static/img", exist_ok=True)
  os.makedirs("static/css", exist_ok=True)
  os.makedirs("static/js", exist_ok=True)
@@ -1533,7 +1534,7 @@ def init_configs():
                 'X-Frame-Options':'SAMEORIGIN',
                 'X-Content-Type-Options': 'nosniff',
                 'Referrer-Policy': 'same-origin',
-                'Server':flask_plus_version,
+                'Server':flask_man_version,
                 'X-Permitted-Cross-Domain-Policies': 'none',
                 'Permissions-Policy': "geolocation 'none'; camera 'none'; speaker 'none';"
                 },
@@ -1555,7 +1556,7 @@ def init_configs():
                 "connection":
                         {
                         "file":
-                            "flask_plus_db.db",
+                            "flask_man_db.db",
                         "isolation_level":
                             None
                         },
@@ -1575,7 +1576,7 @@ def init_configs():
                         "port":
                                 3306,
                         "db":
-                                "flask_plus_db",
+                                "flask_man_db",
                         "autocommit":
                                 True
                     },
@@ -1586,7 +1587,7 @@ def init_configs():
                 "connection":
                     {
                         "dsn":
-                                "localhost/flask_plus_db",
+                                "localhost/flask_man_db",
                         "user":
                                 "root",
                         "password":
@@ -1597,13 +1598,13 @@ def init_configs():
 			},
     "postgresql":{
                 "connection":
-                    "host=localhost dbname=flask_plus_db user=postgres password=root",
+                    "host=localhost dbname=flask_man_db user=postgres password=root",
                 "database_connector":
                         "psycopg2"
 			},
     "mssql":{
                 "connection":
-                    "DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=flask_plus_db;UID=user;PWD=user",
+                    "DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=flask_man_db;UID=user;PWD=user",
                 "database_connector":
                         "pyodbc"
 			},
@@ -1727,7 +1728,7 @@ def help_msg(e):
 
 Usage:
         
-        flask_plus [args...]
+        flask_man [args...]
 
 args:
         
@@ -1738,7 +1739,7 @@ args:
         examples: to show commands examples
         
 
-        upgrade: to upgrade to the latest version of flask_plus package
+        upgrade: to upgrade to the latest version of flask_man package
         
 
         init: to create "config.json" and python files that contains 
@@ -1780,7 +1781,7 @@ def examples_msg():
 Example:
         
         
-        flask_plus manager
+        flask_man manager
 
 
 
@@ -1791,7 +1792,7 @@ Example:
 Example:
         
         
-        flask_plus upgrade
+        flask_man upgrade
 
 
 
@@ -1802,46 +1803,46 @@ Example:
 Example 1 (database: SQLite) :
 
 
-        flask_plus init config
-        flask_plus db sqlite
-        flask_plus init app
-        flask_plus init install
+        flask_man init config
+        flask_man db sqlite
+        flask_man init app
+        flask_man init install
 
 
 Example 2 (database: MySQL/MariaDB) :
 
 
-        flask_plus init config
-        flask_plus db mysql
-        flask_plus init app
-        flask_plus init install
+        flask_man init config
+        flask_man db mysql
+        flask_man init app
+        flask_man init install
         
 
 Example 3 (database: PostgreSQL) :
 
 
-        flask_plus init config
-        flask_plus db postgresql
-        flask_plus init app
-        flask_plus init install
+        flask_man init config
+        flask_man db postgresql
+        flask_man init app
+        flask_man init install
 
 
 Example 4 (database: MS SQL) :
 
 
-        flask_plus init config
-        flask_plus db mssql
-        flask_plus init app
-        flask_plus init install
+        flask_man init config
+        flask_man db mssql
+        flask_man init app
+        flask_man init install
 
 
 Example 5 (database: Oracle SQL) :
 
 
-        flask_plus init config
-        flask_plus db oracle
-        flask_plus init app
-        flask_plus init install
+        flask_man init config
+        flask_man db oracle
+        flask_man init app
+        flask_man init install
 
 
 
@@ -1852,7 +1853,7 @@ Example 5 (database: Oracle SQL) :
 Example:
 
 
-        flask_plus add_template "admin/login.html"
+        flask_man add_template "admin/login.html"
 
 
 
@@ -1863,7 +1864,7 @@ Example:
 Example:
 
 
-        flask_plus delete_template "admin/login.html"
+        flask_man delete_template "admin/login.html"
 
 
 
@@ -1874,13 +1875,13 @@ Example:
 Example 1:
 
 
-        flask_plus add_route "admin/upload"
+        flask_man add_route "admin/upload"
 
 
 Example 2:
 
 
-        flask_plus add_route "/profile/<user_id>"
+        flask_man add_route "/profile/<user_id>"
 
 
 
@@ -1891,13 +1892,13 @@ Example 2:
 Example 1:
 
 
-        flask_plus delete_route "admin/upload"
+        flask_man delete_route "admin/upload"
 
 
 Example 2:
 
 
-        flask_plus delete_route "/profile/<user_id>" 
+        flask_man delete_route "/profile/<user_id>" 
 
 
 
@@ -1908,7 +1909,7 @@ Example 2:
 Example :
 
 
-        flask_plus firebase_bucket "myfbbucket.appspot.com"
+        flask_man firebase_bucket "myfbbucket.appspot.com"
 
 
 
@@ -1919,13 +1920,13 @@ Example :
 Example 1 (Non-Windows):
 
 
-        flask_plus firebase_configs "/home/root/configs.json"
+        flask_man firebase_configs "/home/root/configs.json"
 
 
 Example 2 (Windows):
 
 
-        flask_plus firebase_configs "C:\\Users\\user\\Desktop\\configs.json"
+        flask_man firebase_configs "C:\\Users\\user\\Desktop\\configs.json"
 
 
 
@@ -1936,13 +1937,13 @@ Example 2 (Windows):
 Example 1:
 
 
-        flask_plus db mysql
+        flask_man db mysql
 
 
 Example 2:
 
 
-        flask_plus db postgresql
+        flask_man db postgresql
 """)
 
 
@@ -1995,7 +1996,7 @@ def manager():
  def db():
   t=request.form["db"]
   if t in supported_dbs:
-   os.system('flask_plus db '+t)
+   os.system('flask_man db '+t)
   return redirect('/') 
   
   
@@ -2004,10 +2005,10 @@ def manager():
   t=request.form["db"]
   if t in supported_dbs:
    if file_exists('config.json')==False:
-    os.system('flask_plus init config')
-   os.system('flask_plus db '+t)
-   os.system('flask_plus init app')
-   os.system('flask_plus init install')
+    os.system('flask_man init config')
+   os.system('flask_man db '+t)
+   os.system('flask_man init app')
+   os.system('flask_man init install')
   return redirect('/') 
  
  
@@ -2033,6 +2034,13 @@ def manager():
   upgrade()
   return redirect('/')  
  
+ 
+ @app.route('/backup',methods=["POST"])
+ def backup():
+  shutil.rmtree("backup", ignore_errors=True)
+  os.makedirs("backup", exist_ok=True)
+  path=bind_path('backup','flask-app-backup-'+datetime.datetime.now().strftime("%Y-%b-%d-%H-%M-%S"))
+  return send_file(shutil.make_archive(path , 'zip', root_dir='.'), as_attachment=True)
  
  @app.route('/',methods=["GET"])
  def home():
@@ -2125,11 +2133,11 @@ html body {
         }
     </style>
 
-    <meta name="Title" CONTENT="Flask_plus's project manager">
-    <title>Flask+ 's project manager """+__version__+"""</title>
+    <meta name="Title" CONTENT="flask_man's project manager">
+    <title>Flask's project manager """+__version__+"""</title>
 </head>
 <body><br>
-<center><h1>Flask+ 's project manager<br>v"""+__version__+"""</h1></center>
+<center><h1>Flask's project manager:<br>v"""+__version__+"""</h1></center>
 
 
 <center>
@@ -2242,6 +2250,17 @@ html body {
         
       </center>
 <br><br>   <br>   
+<center><h3>Backup</h3>
+<br>   
+         <form enctype="multipart/form-data" id="myform" action = "/backup" method = "POST" 
+         enctype = "multipart/form-data"><table id="form_" cellspacing="0" cellpadding="0">
+         <div class="input-group input-group-lg">
+         <tr><td><div class="col text-center"><input id="btn" type="submit" class="button btn-block btn-lg" value="backup" /></div></td></tr>
+      </table>
+      </div>
+      </form>  
+        
+      </center><br><br>   <br>   
 <center><h3>Upgrade the package</h3>
 <br>   
          <form enctype="multipart/form-data" id="myform" action = "/upgrade" method = "POST" 
@@ -2308,21 +2327,21 @@ def main():
    init_app()
   except Exception as e:
    print(e)
-   help_msg('Missing configs ! Try runing: flask_plus init config')
+   help_msg('Missing configs ! Try runing: flask_man init config')
   sys.exit()
  if sys.argv[1]=="init" and sys.argv[2]=="install":
   try:
    install()
   except Exception as e:
    print(e)
-   help_msg('Missing configs ! Try runing: flask_plus init config')
+   help_msg('Missing configs ! Try runing: flask_man init config')
   sys.exit()
  if sys.argv[1]=="db" and sys.argv[2] in supported_dbs:
   try:
    conf=read_configs()
   except Exception as ex:
    print(ex)
-   print('Failed to load configs !! Try to run first: flask_plus init')
+   print('Failed to load configs !! Try to run first: flask_man init')
    sys.exit()
   if  sys.argv[2]=="sqlite":
    set_sqlite_database(conf)
