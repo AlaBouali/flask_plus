@@ -15,6 +15,12 @@ def write_configs(d):
      json.dump(d, f, indent=4)
  f.close()
 
+
+def write_json(fi,d):
+ with open(fi, 'w') as f:
+     json.dump(d, f, indent=4)
+ f.close()
+
 def read_file(fl):
  with open(fl,'r') as f:
     content = f.read()
@@ -556,8 +562,7 @@ from flask.sessions import TaggedJSONSerializer
 
 
 
-import firebase_admin
-from firebase_admin import credentials
+
 from google.cloud import storage
 """
 
@@ -741,20 +746,23 @@ def render_template(t,**kwargs):
 #Don't touch what's below unless you know what you are doing :)
 
 
-firebase_creds_file='"""+configs.get("firebase_creds_file",'firebase_creds.json')+"""'
 
 
-firebase_storage_bucket='"""+configs.get("firebase_bucket",'')+"""'
+#https://thepoints.medium.com/upload-data-to-firebase-cloud-firestore-with-10-line-of-python-code-1877690a55c6
+
+
+firebase_creds_file='"""+configs['app'].get("firebase_creds_file",'firebase_creds.json')+"""'
+
+
+firebase_storage_bucket='"""+configs['app'].get("firebase_bucket",'')+"""'
 
 
 firebase_creds=None
 
 
 if firebase_storage_bucket!=None and firebase_storage_bucket.strip()!='':
- os.environ["GOOGLE_APPLICATION_CREDENTIALS"]=firebase_creds_file
+  os.environ["GOOGLE_APPLICATION_CREDENTIALS"]=firebase_creds_file
 
- firebase_creds = credentials.Certificate(firebase_creds_file)
- default_app = firebase_admin.initialize_app(firebase_creds, {'storageBucket': firebase_storage_bucket})
 
 
 
@@ -1188,15 +1196,18 @@ def delete_file_firebase(file_name):
 
 
 def upload_to_firebase(f):
- p=bind_path('tmp','firebase')
- path=save_file(f,path=p)
  storage_client = storage.Client()
  bucket = storage_client.bucket(firebase_storage_bucket)
- direct,file_name=os.path.split(path)
- blob = bucket.blob(file_name) 
- blob.upload_from_filename(path)
- delete_file(path)
+ blob = bucket.blob(f.filename) 
+ blob.upload_from_string(f.read())
  return blob.public_url
+
+
+
+
+def upload_all_to_firebase(f):
+ return [upload_to_firebase(f[x]) for x in f]
+
 
 
 
@@ -1229,12 +1240,8 @@ def list_contains(l,s):
 
 
 
-def send_mail(subject='',sender=app.config['MAIL_USERNAME'],recipients=[],body='',html='',local_attachements=[],user_attachements=None):
+def send_mail(subject='',sender=app.config['MAIL_USERNAME'],recipients=[],body='',html='',local_attachements=[],user_files=None):
    attachements=[]
-   remote_files=[]
-   if user_attachements!=None:
-    remote_files=[save_file(user_attachements[x],path=bind_path('tmp','mail')) for x in user_attachements.files]
-   attachements+=remote_files
    if local_attachements!=None:
     attachements+=local_attachements
    if recipients==None or len(recipients)==0:
@@ -1245,14 +1252,11 @@ def send_mail(subject='',sender=app.config['MAIL_USERNAME'],recipients=[],body='
    msg.body=body
    msg.html = html
    for x in  attachements:
-    msg.attach(os.path.split(x)[1],mimetypes.guess_type(x)[0],read_file(x)) 
-   ex=None
-   try:
-    Flask_Mailler.send(msg)
-   except Exception as ex:
-    for x in remote_files:
-     delete_file(x)
-    raise(ex)
+    msg.attach(os.path.split(x)[1],mimetypes.guess_type(x)[0],read_file(x))
+   if user_files!=None:
+    for x in  user_files:
+     msg.attach(user_files[x].filename,user_files[x].content_type,user_files[x].read())    
+   Flask_Mailler.send(msg)
 
 
 
@@ -1273,17 +1277,6 @@ def write_configs(d):
 
 
 
-def update_configs():
- d=read_configs()
- d["app"]["additional_headers"]=additional_headers
- d["app"]["run"]=app_conf
- d["app"]["sensitive_files"]=sensitive_files
- d["app"]["allowed_file_extensions"]=allowed_file_extensions
- d["app"]["allowed_mimetypes"]=allowed_mimetypes_
- d["app"]["accepted_referer_domains"]=accepted_referer_domains
- d["app"]["accepted_origin_domains"]=accepted_origin_domains
- d["app"]["config"]=server_conf
- write_configs(d)
 
 
 
@@ -1396,13 +1389,40 @@ def downloads(file):
  write_file("settings.py",script2)
  write_file("utils.py",script3)
  if file_exists(configs['app'].get("firebase_creds_file","firebase_creds.json"))==False:
-  write_file(configs['app'].get("firebase_creds_file","firebase_creds.json"),'{}')
+  write_json(configs['app'].get("firebase_creds_file","firebase_creds.json"),{
+  "type": "service_account",
+  "project_id": "flask-plus",
+  "private_key_id": "e33b113c02e14bc884bbc48d6c4a110f38b37b1f",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCRONAGcd/iQG+j\nsZhw7mtPlNYyZjOD9K/cBcZ26bv1rMf2089SWD9wbBy8yK7U/um9ultWnn6onWkb\niEXs3NQ6ECjihARHsVGP21wY9uN5Gk79p4JKY6kTFWOXSaQvPzZ/8JOzHflzAKhd\nkg9KMx6KF0DCiFC6qW8RJBNGaz4OfSJykmYCwjKXwAk1B5kXKwcy54nErMBrKtlr\n+vFs8/a6E/V6P6pKZ3UftYLCIe1f+5qSaCpdga7wQUGK6qScRhEK/ku2qMTbbdVC\nH4xLWUJWjl2xl6py788TDj7sSQdWRmnaDTtIJ7AAPy8NgurHzH6yFNBfGA/JUiTy\nqvnhqwTvAgMBAAECggEANeocuTfPwcTgbaqCiPLLHlmIiF+PIp9WJt5yBzXRlW0X\nNBkA8HZY3xkUNjZfSi51gv3L6UWgimMeYZ1fMIfvtrrHIwmWOTOorzrmX1JRs2VE\nDEIDSjDj1XTsa39omC3kwu0DOM2ZDcwhtdODH64I2YW2gkJvjk1XMcrt6QfpmyDk\nyNJtzoXJgiwK+da+CUxpsGpqM8tNhDH9qz6+YSnn3zbGde3pERWzgowmdQO2SZK5\nAgyCek9n4KuRJ2BXOMi8c9cPmTags0mo0kYAet9Wu277mHcCWwVEhB471IWN8Law\n9Pxg0XSm+27233SYvGPq8FVOaOwngymWNtogRBt28QKBgQDHVOWIzElubASDBKVf\nB7crgysipXWUex1HgnBMXzTJtJAxMs4M9J2D/lPRqLfC+iS88vBGeArJVP9p8gQc\nysAfGQE7b7rSssuWNnNgaiKByNqOKPCFwUFOlD0YAsGCOOgR3Ppc6k6wgwSzBiGZ\n4RKJjmP26rI0sLsxifBM0AoAJwKBgQC6geFcLUprI0nWUoolmyR+gmXAVP8T9C7B\norTEODLBOhg6s8p4HCIV07RcD/Q8oPBVEOgDThpAq3SpxBYXms/DCLsRWO3yZB5u\nWemmxdlmB0gvdEF5tTs7jdgroOJukG+ntrvLVbhVoNV+0Agk0Os6ABgEGJzGF3kr\nvKVDcMSJ+QKBgF/b/wq7m7DDt6O+bzz1O+xsBymBQrtmPZ1vKExCGOPLtvBCC3+F\nf97DR1HzfnQA0fwgJNbu0dkizDYKElo6UwxhfQs1XzYGkAusIe5C/FdH3XsySwE4\nAA0nEv5iDOdwMIKur6RRdghC6daiYzRaXgzS8lYDZjIar9tSB8MY5UZPAoGADbD5\nJTYh72mAwx3+DDKuZCcYZx0WOJXFVOunz3u8phiorK6EH3sZOXb4F4YITOcXnXcH\nQS7bmIG9p7TAVm1D8TJT4TshBJk67qjlERwXEHlaYDltkQyv03hfNRyzYqBxweMV\nOCELziVnZs7IukMn8XMOUEaqQ5R3jbFkhGXj16kCgYBVT72lb7l8upp1wRKS7uxR\n1iBhBH+sd5WTVy58c5eJ/Yh3Wk9/EY/eX65v4PsiAT07+yVijOySrV67XKZ47z5W\n2ofPgK1c6gtEiERZKEkT2RuoYZGUT2Dnin79dCvopfYg4lJsFFamnzT/C9H54qf7\nqnTOn60B8dbp6YAuvwuT+w==\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-8z7xd@flask-plus.iam.gserviceaccount.com",
+  "client_id": "112885768186449207156",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-8z7xd%40flask-plus.iam.gserviceaccount.com"
+})
  write_file("handlings.py",script4)
  write_file("templates.py",s1)
  write_file("routes.py",s2)
  write_file(configs["app"].get('name','app')+".py","""from templates import *
 
+def update_configs():
+ d=read_configs()
+ d["app"]["additional_headers"]=additional_headers
+ d["app"]["run"]=app_conf
+ d["app"]["sensitive_files"]=sensitive_files
+ d["app"]["allowed_file_extensions"]=allowed_file_extensions
+ d["app"]["allowed_mimetypes"]=allowed_mimetypes_
+ d["app"]["accepted_referer_domains"]=accepted_referer_domains
+ d["app"]["accepted_origin_domains"]=accepted_origin_domains
+ d["app"]["config"]=server_conf
+ d[database_type]["connection"]=database_credentials
+ write_configs(d)
+
+
+
 update_configs()
+
 
 if __name__ == '__main__':
    app.run(**app_conf)
@@ -1413,7 +1433,6 @@ if __name__ == '__main__':
  if configs["app"].get('uploads',None)!=None:
   os.makedirs("uploads", exist_ok=True)
  os.makedirs("static", exist_ok=True)
- os.makedirs("tmp/firebase", exist_ok=True)
  os.makedirs("tmp/mail", exist_ok=True)
  os.makedirs("static/img", exist_ok=True)
  os.makedirs("static/css", exist_ok=True)
@@ -1506,7 +1525,7 @@ def init_configs():
         "firebase_creds_file":
                 "firebase_creds.json",
         "firebase_bucket":
-                None,
+                'flask-plus.appspot.com',
         "additional_headers":
                 {
                 'X-Frame-Options':'SAMEORIGIN',
@@ -1525,7 +1544,7 @@ def init_configs():
         "uploads":
             [],
         "requirements":
-            ["flask","sanitizy","flask-limiter","google-cloud-storage","firebase_admin","Flask-reCaptcha","Flask-Mail","werkzeug","gunicorn","itsdangerous","Jinja2","psycopg2","pyodbc","cx_Oracle"],
+            ["flask","sanitizy","flask-limiter","google-cloud-storage","Flask-reCaptcha","Flask-Mail","werkzeug","gunicorn","itsdangerous","Jinja2","psycopg2","pyodbc","cx_Oracle"],
         "pip":
             "pip" if sys.version_info < (3,0) else "pip3"
         },
@@ -1534,7 +1553,7 @@ def init_configs():
                 "connection":
                         {
                         "file":
-                            "test_api.db",
+                            "flask_plus_db.db",
                         "isolation_level":
                             None
                         },
@@ -1554,7 +1573,7 @@ def init_configs():
                         "port":
                                 3306,
                         "db":
-                                "test_api",
+                                "flask_plus_db",
                         "autocommit":
                                 True
                     },
@@ -1565,7 +1584,7 @@ def init_configs():
                 "connection":
                     {
                         "dsn":
-                                "localhost/test_api",
+                                "localhost/flask_plus_db",
                         "user":
                                 "root",
                         "password":
@@ -1576,13 +1595,13 @@ def init_configs():
 			},
     "postgresql":{
                 "connection":
-                    "host=localhost dbname=test_api user=postgres password=root",
+                    "host=localhost dbname=flask_plus_db user=postgres password=root",
                 "database_connector":
                         "psycopg2"
 			},
     "mssql":{
                 "connection":
-                    "DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=test_api;UID=user;PWD=user",
+                    "DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=flask_plus_db;UID=user;PWD=user",
                 "database_connector":
                         "pyodbc"
 			},
@@ -1982,7 +2001,8 @@ def manager():
  def create():
   t=request.form["db"]
   if t in supported_dbs:
-   os.system('flask_plus init config')
+   if file_exists('config.json')==False:
+    os.system('flask_plus init config')
    os.system('flask_plus db '+t)
    os.system('flask_plus init app')
    os.system('flask_plus init install')
