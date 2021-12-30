@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="flask_plus",
-    version="1.1.7",
+    version="1.0.0",
     author="AlaBouali",
     author_email="trap.leader.123@gmail.com",
     description="Flask module to auto setup the project's configurations (app and database)",
