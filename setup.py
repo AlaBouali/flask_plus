@@ -8,7 +8,7 @@ setuptools.setup(
     version="1.0.0",
     author="AlaBouali",
     author_email="trap.leader.123@gmail.com",
-    description="Flask module to auto setup the project's configurations (app and database)",
+    description="Flask module to auto setup and manage the project and its configurations (app code, templates, databases...)",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/AlaBouali/flask_plus",
